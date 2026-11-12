@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="ru" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07110c">
+<title>EcoTrack · Учёт пищевых отходов без бумажных журналов</title>
+<meta name="description" content="Взвешивание со смартфона, проверка отчёта, единый реестр, CO₂ по DEFRA и автоматические выводы. Цифровой учёт пищевых отходов для университетов и общепита.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.replace('no-js','js');
+  if (/^#\//.test(location.hash)) location.replace('/app' + location.hash);</script>
+<style>
+/* Шрифты Geist и Geist Mono (fontsource). Без сети страница остаётся на системном шрифте. */
+@font-face{font-family:"Geist";src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist:vf@latest/latin-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Geist";src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist:vf@latest/cyrillic-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:"Geist Mono";src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-mono:vf@latest/latin-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url(https://cdn.jsdelivr.net/fontsource/fonts/geist-mono:vf@latest/cyrillic-wght-normal.woff2) format("woff2");font-weight:100 900;font-display:swap;unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+:root{
+  --bg:#07110c;--bg-raise:#0a1610;--surface:#0d1b14;--surface-2:#12231a;--surface-3:#182d22;
+  --line:rgba(226,245,232,.075);--line-2:rgba(226,245,232,.12);--line-3:rgba(226,245,232,.2);
+  --text:#eef5f0;--text-2:#a9bbaf;--text-3:#7a8d80;
+  --accent:#c4ef6b;--accent-hi:#d4f78a;--accent-text:#d6f59a;--accent-ink:#0f2e22;--accent-soft:rgba(196,239,107,.1);--accent-line:rgba(196,239,107,.34);
+  --ok:#6cc59a;--warn:#d8b064;--neg:#df8080;
+  --font-sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--font-mono:"Geist Mono",ui-monospace,Menlo,Consolas,monospace;
+  --fs-display:clamp(2.5rem,6.4vw,5.6rem);--fs-h2:clamp(2rem,1.3rem + 2.55vw,3.2rem);--fs-lead:clamp(1.0625rem,1rem + .3vw,1.2rem);
+  --r-sm:10px;--r-lg:18px;--r-xl:26px;--r-pill:999px;
+  --inset:inset 0 1px 0 rgba(255,255,255,.055),inset 2px 4px 16px rgba(248,248,248,.025);
+  --shadow-cine:0 9px 20px rgba(0,0,0,.29),0 37px 37px rgba(0,0,0,.26),0 84px 50px rgba(0,0,0,.15),0 149px 60px rgba(0,0,0,.04);
+  --ease-out:cubic-bezier(.22,1,.36,1);--ease-snap:cubic-bezier(.23,1,.32,1);--d-fast:180ms;--d-reveal:680ms;
+  --container:1240px;--gutter:clamp(16px,4vw,40px);--section:clamp(88px,11vw,150px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--bg);scroll-padding-top:96px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+h1,h2,h3,p,ul{margin:0}ul{padding:0;list-style:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.wrap{width:min(100% - 2*var(--gutter),var(--container));margin-inline:auto}
+.mono{font-family:var(--font-mono)}.tnum{font-variant-numeric:tabular-nums}
+.i{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.display{font-size:var(--fs-display);line-height:1.04;letter-spacing:-.045em;font-weight:560;padding-block:.2em;max-width:64rem;margin-inline:auto}
+.h2{font-size:var(--fs-h2);line-height:1.06;letter-spacing:-.035em;font-weight:540;text-wrap:balance}
+.h3{font-size:1.14rem;line-height:1.3;letter-spacing:-.015em;font-weight:570}
+.lead{font-size:var(--fs-lead);line-height:1.55;color:var(--text-2);max-width:40rem;text-wrap:pretty}
+.body{color:var(--text-2);font-size:.95rem}
+.grad{background:linear-gradient(180deg,#7b8f82 0%,#c7d6cc 34%,#f3f8f4 62%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.label{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+/* кнопки */
+.btn{--h:46px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.55rem;height:var(--h);padding:0 1.15rem;border-radius:var(--r-sm);font-size:.95rem;font-weight:540;white-space:nowrap;border:1px solid transparent;transition:transform 140ms var(--ease-snap),background-color var(--d-fast),border-color var(--d-fast)}
+.btn:active{transform:scale(.97)}.btn .i{width:16px;height:16px}.btn .i-arr{transition:transform var(--d-fast) var(--ease-snap)}
+.btn-sm{--h:38px;padding:0 .95rem;font-size:.875rem}.btn-lg{--h:52px;padding:0 1.4rem;font-size:1rem}
+.btn-primary{background:var(--accent);color:var(--accent-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.18),0 10px 26px -14px rgba(196,239,107,.7)}
+.btn-ghost{background:rgba(255,255,255,.035);border-color:var(--line-2);color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+@media (hover:hover){.btn-primary:hover{background:var(--accent-hi)}.btn-ghost:hover{background:rgba(255,255,255,.07);border-color:var(--line-3)}.btn:hover .i-arr{transform:translateX(3px)}}
+/* навигация-пилюля */
+.site-header{position:fixed;inset:0 0 auto;z-index:100;padding-top:14px;pointer-events:none}
+.nav-pill{--spread:0px;position:relative;pointer-events:auto;margin:0 auto;width:min(100% - 24px,940px);height:60px;display:flex;align-items:center;gap:6px;padding:0 10px 0 14px}
+.nav-bg{position:absolute;inset:0;border-radius:var(--r-pill);background:rgba(15,18,22,.72);border:1px solid var(--line-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 18px 40px -20px rgba(0,0,0,.9);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);opacity:0;transform:scale(.97);transition:opacity 260ms,transform 520ms var(--ease-out)}
+.site-header.is-scrolled .nav-bg{opacity:1;transform:none}
+.site-header.is-scrolled .nav-brand,.site-header.is-scrolled .nav-cta{transform:none}
+.brand{display:inline-flex;align-items:center;gap:.6rem;font-weight:620;font-size:1.02rem;letter-spacing:-.02em}
+.brand-mark{width:28px;height:28px}
+.nav-brand,.nav-cta{position:relative;transition:transform 560ms var(--ease-out)}
+.nav-brand{transform:translateX(calc(var(--spread) * -1))}.nav-cta{transform:translateX(var(--spread));margin-left:auto;display:flex;gap:6px;align-items:center}
+.nav-links{position:relative;display:flex;gap:2px;margin-left:18px}
+.nav-links a{display:inline-flex;align-items:center;height:38px;padding:0 12px;border-radius:var(--r-pill);font-size:.9rem;color:var(--text-2);transition:color var(--d-fast),background-color var(--d-fast)}
+@media (hover:hover){.nav-links a:hover{color:var(--text);background:rgba(255,255,255,.05)}}
+@media (max-width:959.98px){.nav-links,.nav-signin{display:none}.nav-pill{--spread:0px!important}}
+/* световые лучи */
+.shafts{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.shafts span{position:absolute;top:-30%;width:22vw;height:150%;background:linear-gradient(180deg,rgba(214,240,222,.06),rgba(214,240,222,0) 70%);transform:rotate(24deg);filter:blur(10px)}
+.shafts span:nth-child(1){left:8%}.shafts span:nth-child(2){left:38%;width:12vw;opacity:.7}.shafts span:nth-child(3){left:66%;width:18vw;opacity:.55}
+/* герой */
+.hero{position:relative;padding-top:8.5rem;text-align:center;isolation:isolate}
+.hero > .wrap{position:relative;z-index:1}
+.hero .lead{margin:1rem auto 0;max-width:46rem;font-size:clamp(1rem,1.6vw,1.22rem)}
+.proof{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:1.6rem;color:var(--text-2);font-size:.92rem;flex-wrap:wrap}
+.proof b{color:var(--text);font-weight:560}.proof .dot{width:4px;height:4px;border-radius:50%;background:var(--line-3)}
+.hero-cta{margin-top:1.8rem;display:flex;justify-content:center}
+.stage{margin-top:clamp(48px,7vw,84px);perspective:1000px}
+.tilt-card{position:relative;width:min(100%,72rem);margin:0 auto;border-radius:var(--r-xl);padding:9px;background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.02));box-shadow:var(--shadow-cine);transform-origin:50% 50%;transform:rotateX(var(--rx,20deg));will-change:transform}
+.tilt-card::before{content:"";position:absolute;top:0;left:-30%;width:30%;height:1px;background:linear-gradient(90deg,transparent,var(--accent-text),transparent);animation:meteor 6s linear infinite}
+@keyframes meteor{to{left:100%}}
+.tilt-fade{position:absolute;left:0;right:0;bottom:0;height:38%;background:linear-gradient(180deg,rgba(8,9,11,0),var(--bg) 92%);border-radius:0 0 var(--r-xl) var(--r-xl);pointer-events:none}
+/* интерфейс продукта внутри карточки */
+.app{display:grid;grid-template-columns:200px 1fr 260px;min-height:470px;border-radius:18px;overflow:hidden;background:var(--surface);border:1px solid var(--line-2);text-align:left;font-size:13px}
+.side{background:var(--bg-raise);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.ws{display:flex;align-items:center;gap:8px;padding:6px 8px 14px;font-weight:600}
+.ws i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#2b6a86,#1d4a5e);display:grid;place-items:center;font-style:normal;font-size:11px}
+.side a{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;color:var(--text-2)}
+.side a.on{background:var(--surface-3);color:var(--text)}
+.side a .n{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+.side .sep{margin:12px 8px 4px}
+.list{display:flex;flex-direction:column;min-width:0}
+.list-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.list-head b{font-weight:600}.list-head .cnt{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:99px;border:1px solid var(--line-2);font-size:11px;color:var(--text-2)}
+.pill.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.rows{position:relative;overflow:hidden;flex:1}
+.row{display:grid;grid-template-columns:22px 1fr auto auto;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.row.sel{background:rgba(196,239,107,.05);box-shadow:inset 2px 0 0 var(--accent)}
+.row.new{animation:rowin 700ms var(--ease-out)}
+@keyframes rowin{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+.av{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#e6f2f6}
+.av.a1{background:linear-gradient(135deg,#2b6a86,#1b4456)}.av.a2{background:linear-gradient(135deg,#3f7a64,#264d3f)}.av.a3{background:linear-gradient(135deg,#8a6330,#5a3f1e)}.av.a4{background:linear-gradient(135deg,#3f5f8a,#283d5a)}.av.a5{background:linear-gradient(135deg,#3a5f6b,#243c44)}
+.row .t{min-width:0}.row .t b{display:block;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row .t small{color:var(--text-3);font-size:11.5px}
+.row .kg{font-family:var(--font-mono);font-size:12.5px;color:var(--text)}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font-size:10.5px;font-weight:600;border:1px solid}
+.tag.tbo{color:#e3a5a5;border-color:rgba(223,128,128,.3);background:rgba(223,128,128,.08)}
+.tag.ok{color:#9fd9bb;border-color:rgba(108,197,154,.3);background:rgba(108,197,154,.08)}
+.tag.ac{color:var(--accent-text);border-color:var(--accent-line);background:var(--accent-soft)}
+.detail{border-left:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:12px;background:var(--bg-raise)}
+.kv{display:flex;justify-content:space-between;color:var(--text-2);font-size:12px}.kv b{color:var(--text);font-family:var(--font-mono);font-weight:500}
+.hint{border:1px solid var(--accent-line);background:var(--accent-soft);border-radius:10px;padding:10px;font-size:12px;color:var(--accent-text)}
+.mini{display:flex;align-items:flex-end;gap:5px;height:70px;padding-top:6px}
+.mini span{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--accent),rgba(196,239,107,.25));transform-origin:bottom}
+/* секции */
+.section{padding-block:var(--section);position:relative}
+.sec-head{max-width:44rem;margin-bottom:clamp(36px,5vw,56px)}
+.sec-head.center{margin-inline:auto;text-align:center}.sec-head.center .lead{margin-inline:auto}
+.sec-head .lead{margin-top:14px}
+.chip3d{width:46px;height:46px;margin:0 auto 22px;perspective:420px}
+.chip3d span{display:grid;place-items:center;width:100%;height:100%;border-radius:13px;background:linear-gradient(180deg,#24392d,#0d1a13);border:1px solid var(--line-3);color:var(--accent);transform:rotateX(24deg);box-shadow:0 14px 26px -12px rgba(196,239,107,.45),inset 0 1px 0 rgba(255,255,255,.12)}
+.chip3d .i{width:22px;height:22px}
+/* бенто */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.card{position:relative;border-radius:var(--r-lg);border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));box-shadow:var(--inset);padding:22px;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+.b-wide{grid-column:span 4}.b-third{grid-column:span 2}.b-half{grid-column:span 3}
+.vig{margin-top:auto;border-radius:12px;border:1px solid var(--line);background:var(--bg-raise);padding:12px;min-height:150px;position:relative;overflow:hidden}
+@media (max-width:960px){.b-wide,.b-third,.b-half{grid-column:span 6}}
+/* виньетка: много входов в один реестр */
+.hub{display:grid;grid-template-columns:1fr 70px 1fr;align-items:center;gap:6px;height:100%}
+.srcs{display:grid;gap:8px}.src{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface);font-size:12.5px;color:var(--text-2)}
+.src .i{color:var(--accent);width:15px;height:15px}
+.wire{position:relative;height:120px}
+.wire svg{width:100%;height:100%}.wire path{stroke:var(--line-3);stroke-width:1.2;fill:none}
+.wire .pulse{stroke:var(--accent);stroke-dasharray:6 120;animation:dash 2.4s linear infinite}
+.wire .pulse:nth-of-type(2){animation-delay:.8s}.wire .pulse:nth-of-type(3){animation-delay:1.6s}
+@keyframes dash{from{stroke-dashoffset:126}to{stroke-dashoffset:0}}
+.core{padding:14px;border-radius:12px;border:1px solid var(--accent-line);background:var(--accent-soft);text-align:center}
+.core b{display:block;font-size:22px;font-family:var(--font-mono);color:var(--text)}.core small{color:var(--accent-text);font-size:11.5px}
+/* виньетка: автопроверка */
+.scan{display:grid;gap:7px}.chk{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--text-2);padding:7px 9px;border-radius:8px;background:var(--surface)}
+.chk .d{width:7px;height:7px;border-radius:50%;flex:none}.d.ok{background:var(--ok)}.d.w{background:var(--warn)}
+.beam{position:absolute;left:0;right:0;height:38px;top:-40px;background:linear-gradient(180deg,transparent,rgba(196,239,107,.12),transparent);animation:beam 3.6s var(--ease-out) infinite}
+@keyframes beam{to{top:100%}}
+/* виньетка: CO2 */
+.co2 svg{width:100%;height:120px}.co2 .ln{stroke:var(--accent);stroke-width:2;fill:none;stroke-dasharray:400;stroke-dashoffset:400}
+.in .co2 .ln{animation:draw 1.8s var(--ease-out) forwards .2s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.big{font-size:2rem;font-weight:560;letter-spacing:-.03em;font-family:var(--font-mono)}
+/* виньетка: статусы */
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.flow .tag{height:24px;font-size:11.5px}.arr{color:var(--text-3)}
+.msg{margin-top:12px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);padding:10px;font-size:12.5px;color:var(--text-2)}
+.msg b{color:var(--text)}
+/* виньетка: Telegram */
+.tg{display:grid;gap:8px}.bub{max-width:88%;padding:8px 11px;border-radius:12px;font-size:12.5px;line-height:1.4}
+.bub.me{justify-self:end;background:#1f5c3f;color:#eaf7ef;border-bottom-right-radius:4px}
+.bub.bot{background:var(--surface-3);color:var(--text-2);border-bottom-left-radius:4px}.bub.bot b{color:var(--text)}
+.bub .k{display:flex;gap:6px;margin-top:7px}.bub .k span{flex:1;text-align:center;padding:5px;border-radius:7px;background:rgba(196,239,107,.14);color:var(--accent-text);font-size:11.5px}
+/* сценарий */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;counter-reset:s}
+.step{border-top:1px solid var(--line-2);padding-top:18px;position:relative}
+.step::before{content:"";position:absolute;top:-1px;left:0;width:0;height:1px;background:var(--accent);transition:width 1.2s var(--ease-out)}
+.in .step::before,.step.in::before{width:100%}
+.step .k{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;color:var(--accent-text)}
+.step h3{margin:10px 0 8px}
+@media (max-width:900px){.steps{grid-template-columns:1fr 1fr}}@media (max-width:560px){.steps{grid-template-columns:1fr}}
+/* эффект */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat{padding:24px 22px;border-radius:var(--r-lg);border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.008));box-shadow:var(--inset)}
+.stat .v{font-size:clamp(2.2rem,4vw,3.2rem);font-weight:540;letter-spacing:-.04em;line-height:1}
+.stat .v small{font-size:.45em;color:var(--text-2);letter-spacing:0;margin-left:4px}
+.stat p{margin-top:10px;color:var(--text-2);font-size:.9rem}
+.note{margin-top:18px;color:var(--text-3);font-size:.82rem;max-width:60rem}
+@media (max-width:900px){.stats{grid-template-columns:1fr 1fr}}
+/* CTA */
+.cta{position:relative;padding-block:var(--section);overflow:hidden;isolation:isolate}
+.cta-box{position:relative;z-index:1;border-radius:var(--r-xl);border:1px solid var(--line-2);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01));box-shadow:var(--inset);padding:clamp(28px,5vw,64px);display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center}
+.cta-box .acts{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
+.roles{display:grid;gap:8px}
+.role{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);transition:border-color var(--d-fast),transform 140ms var(--ease-snap)}
+.role:hover{border-color:var(--accent-line)}.role:active{transform:scale(.98)}
+.role .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--surface-3);color:var(--accent)}
+.role b{display:block;font-weight:560;font-size:.95rem}.role small{color:var(--text-3);font-size:.8rem}.role .go{margin-left:auto;color:var(--text-3)}
+@media (max-width:860px){.cta-box{grid-template-columns:1fr}}
+footer{border-top:1px solid var(--line);padding:32px 0 48px;color:var(--text-3);font-size:.85rem}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+/* появление при прокрутке: контент виден и без JS */
+.js .rv{opacity:0;transform:translateY(18px);transition:opacity var(--d-reveal) var(--ease-out),transform var(--d-reveal) var(--ease-out);transition-delay:calc(var(--i,0) * 70ms)}
+.js .rv.in{opacity:1;transform:none}
+.js .hero .rv{transition-duration:600ms}
+/* телефоны */
+@media (max-width:900px){.app{grid-template-columns:1fr}.side,.detail{display:none}.row{grid-template-columns:22px 1fr auto}.row .m-hide{display:none}}
+@media (max-width:640px){.display{text-wrap:balance}.hero{padding-top:7rem}.app{min-height:400px}.nav-cta .btn-ghost{display:none}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.tilt-card{transform:none!important}.tilt-card::before,.beam{display:none}.js .rv{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol>
+  <symbol id="arr" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+  <symbol id="send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="scale" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1ZM2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0M12 17v5"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+  <symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+</svg>
+
+<header class="site-header" id="hdr">
+  <nav class="nav-pill" aria-label="EcoTrack">
+    <span class="nav-bg" aria-hidden="true"></span>
+    <a class="brand nav-brand" href="#top"><svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#c4ef6b"/><g transform="translate(5 5) scale(.75)" fill="none" stroke="#0f2e22" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><use href="#leaf"/></g></svg>EcoTrack</a>
+    <div class="nav-links"><a href="#product">Возможности</a><a href="#workflow">Как это работает</a><a href="#impact">Эффект</a></div>
+    <div class="nav-cta"><a class="btn btn-ghost btn-sm" href="https://t.me/atufoodwastebot" rel="noopener">Telegram-бот</a><a class="btn btn-primary btn-sm" href="/app#/login">Войти</a></div>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="shafts" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="wrap">
+      <h1 class="display grad rv" id="hero-title" style="--i:0">Отходы под контролем,<br>отчёт за минуту</h1>
+      <p class="lead rv" style="--i:1">Взвешивание со смартфона за три касания, проверка отчёта и автоматические выводы вместо бумажных журналов.</p>
+      <div class="proof rv" style="--i:2"><span><b>5</b> подразделений АТУ</span><span class="dot"></span><span>коэффициенты <b>DEFRA 2024</b></span><span class="dot"></span><span>цель <b>ЦУР 12.3</b></span></div>
+      <div class="hero-cta rv" style="--i:3"><a class="btn btn-primary btn-lg" href="/app#/login">Открыть систему <svg class="i i-arr"><use href="#arr"/></svg></a></div>
+    </div>
+    <div class="stage wrap rv" style="--i:4">
+      <div class="tilt-card" id="tilt">
+        <div class="app" role="img" aria-label="Интерфейс EcoTrack: живой список взвешиваний столовой и подсказка о компостировании">
+          <aside class="side">
+            <div class="ws"><i>АТУ</i>Университетский комплекс</div>
+            <a class="on"><svg class="i"><use href="#inbox"/></svg>Взвешивания<span class="n" id="cnt2">47</span></a>
+            <a><svg class="i"><use href="#check"/></svg>На проверке<span class="n">1</span></a>
+            <a><svg class="i"><use href="#chart"/></svg>Аналитика</a>
+            <a><svg class="i"><use href="#file"/></svg>Сводный отчёт</a>
+            <div class="label sep">Подразделения</div>
+            <a>Столовая Искандер</a><a>ATU INN</a><a>Кофейня Canella</a><a>Кафедра ТХиПП</a>
+          </aside>
+          <section class="list">
+            <div class="list-head"><b>Ноябрь 2026 · Столовая Искандер</b><span class="pill live">в реальном времени</span><span class="cnt tnum" id="cnt">47 записей</span></div>
+            <div class="rows" id="rows">
+              <div class="row sel"><span class="av a1">ИС</span><span class="t"><b>Пищевые отходы из зала</b><small>iskander · Telegram · 12:41</small></span><span class="tag tbo m-hide">ТБО</span><span class="kg">28,5 кг</span></div>
+              <div class="row"><span class="av a2">ИС</span><span class="t"><b>Отработанное масло</b><small>iskander · фраза · 12:40</small></span><span class="tag ok m-hide">биотопливо</span><span class="kg">3 л</span></div>
+              <div class="row"><span class="av a3">ИН</span><span class="t"><b>Очистки овощей</b><small>inn · весы · 11:58</small></span><span class="tag ac m-hide">компост</span><span class="kg">12,4 кг</span></div>
+              <div class="row"><span class="av a4">КЦ</span><span class="t"><b>Кофейный жмых</b><small>canella · форма · 11:20</small></span><span class="tag ac m-hide">компост</span><span class="kg">4,6 кг</span></div>
+              <div class="row"><span class="av a5">ТХ</span><span class="t"><b>Отходы образцов хлебобулочных</b><small>thipp · форма · 10:05</small></span><span class="tag tbo m-hide">ТБО</span><span class="kg">2,1 кг</span></div>
+              <div class="row"><span class="av a1">ИС</span><span class="t"><b>Остатки нереализованной продукции</b><small>iskander · форма · 09:30</small></span><span class="tag tbo m-hide">ТБО</span><span class="kg">9,7 кг</span></div>
+              <div class="row"><span class="av a3">ИН</span><span class="t"><b>Картонная тара</b><small>inn · весы · 09:12</small></span><span class="tag ok m-hide">вторсырьё</span><span class="kg">3,3 кг</span></div>
+            </div>
+          </section>
+          <aside class="detail">
+            <div><div class="label">Запись</div><div style="font-weight:600;margin-top:6px">Пищевые отходы из зала</div></div>
+            <div class="kv"><span>Вес</span><b>28,5 кг</b></div><div class="kv"><span>Способ</span><b>ТБО</b></div><div class="kv"><span>CO₂-экв.</span><b>19,96 кг</b></div>
+            <div class="hint">Рекомендуется: компостирование. Минус 0,69 кг CO₂ на каждый кг.</div>
+            <div><div class="label">7 дней, кг</div><div class="mini"><span style="height:72%"></span><span style="height:58%"></span><span style="height:64%"></span><span style="height:80%"></span><span style="height:61%"></span><span style="height:90%"></span><span style="height:47%"></span></div></div>
+          </aside>
+        </div>
+        <div class="tilt-fade" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="product" aria-labelledby="product-title">
+    <div class="wrap">
+      <div class="sec-head center rv"><div class="chip3d" aria-hidden="true"><span><svg class="i"><use href="#leaf"/></svg></span></div>
+        <h2 class="h2 grad" id="product-title">Одна система вместо пяти журналов</h2>
+        <p class="lead">Ввод на месте, проверка, единый реестр и выводы всегда под рукой: с телефона, ноутбука или в Telegram.</p></div>
+      <div class="bento">
+        <article class="card b-wide rv"><h3 class="h3">Любой способ ввода попадает в один реестр</h3><p class="body">Плитки на телефоне, фраза голосом, бот в Telegram или электронные весы по API.</p>
+          <div class="vig"><div class="hub">
+            <div class="srcs"><div class="src"><svg class="i"><use href="#phone"/></svg>Форма, 3 касания</div><div class="src"><svg class="i"><use href="#send"/></svg>Telegram-бот</div><div class="src"><svg class="i"><use href="#scale"/></svg>Весы по API</div></div>
+            <div class="wire" aria-hidden="true"><svg viewBox="0 0 70 120" preserveAspectRatio="none"><path d="M0 20 C40 20 30 60 70 60"/><path d="M0 60 L70 60"/><path d="M0 100 C40 100 30 60 70 60"/><path class="pulse" d="M0 20 C40 20 30 60 70 60"/><path class="pulse" d="M0 60 L70 60"/><path class="pulse" d="M0 100 C40 100 30 60 70 60"/></svg></div>
+            <div class="core"><b class="tnum">1 895</b><small>записей в реестре</small></div>
+          </div></div></article>
+        <article class="card b-third rv" style="--i:1"><h3 class="h3">Автопроверка отчёта</h3><p class="body">Проверяющий видит отклонения, дубли и пропуски до решения.</p>
+          <div class="vig"><span class="beam" aria-hidden="true"></span><div class="scan"><div class="chk"><span class="d w"></span>ATU INN: нереализованная продукция +62%</div><div class="chk"><span class="d ok"></span>Дублей не найдено</div><div class="chk"><span class="d ok"></span>Записи есть за все рабочие дни</div></div></div></article>
+        <article class="card b-third rv"><h3 class="h3">CO₂ по формуле DEFRA</h3><p class="body">Масса × коэффициент способа. Видно, сколько даст компост.</p>
+          <div class="vig co2"><div class="big tnum">−99%</div><div class="label">потенциал снижения CO₂</div><svg viewBox="0 0 300 120" aria-hidden="true"><path class="ln" d="M0 20 C60 22 90 30 130 46 S210 92 300 104"/></svg></div></article>
+        <article class="card b-third rv" style="--i:1"><h3 class="h3">Статусы и возврат с комментарием</h3><p class="body">Каждый переход записан в историю, ответственный видит причину.</p>
+          <div class="vig"><div class="flow"><span class="tag ac">отправлено</span><span class="arr">→</span><span class="tag tbo">возвращено</span><span class="arr">→</span><span class="tag ok">принято</span></div>
+            <div class="msg"><b>reviewer:</b> уточните способ утилизации хлебных остатков</div></div></article>
+        <article class="card b-third rv" style="--i:2"><h3 class="h3">Бот присылает отчёт в чат</h3><p class="body">Итоги недели, сравнение и Excel без входа на сайт.</p>
+          <div class="vig"><div class="tg"><div class="bub me">отходы из зала 12 кг, масло 3 л</div><div class="bub bot"><b>Распознано:</b> 12 кг · 3 л<div class="k"><span>Сохранить</span><span>Отмена</span></div></div></div></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="workflow" aria-labelledby="workflow-title" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head rv"><h2 class="h2 grad" id="workflow-title">От кухни до квартального отчёта</h2><p class="lead">Полный цикл без ручного сведения таблиц.</p></div>
+      <div class="steps">
+        <div class="step rv"><div class="k">01 · ВВОД</div><h3 class="h3">Взвесили на месте</h3><p class="body">QR на кухне открывает форму. Итоги дня и месяца считаются сразу.</p></div>
+        <div class="step rv" style="--i:1"><div class="k">02 · ПРОВЕРКА</div><h3 class="h3">Эколог принимает</h3><p class="body">Автопроверка подсвечивает отклонения, возврат только с комментарием.</p></div>
+        <div class="step rv" style="--i:2"><div class="k">03 · РЕЕСТР</div><h3 class="h3">Данные сведены</h3><p class="body">Принятые записи в едином реестре с фильтрами и выгрузкой.</p></div>
+        <div class="step rv" style="--i:3"><div class="k">04 · ВЫВОДЫ</div><h3 class="h3">Отчёт и рекомендации</h3><p class="body">Excel по структуре таблиц АТУ, CO₂, заключение для руководства.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="impact" aria-labelledby="impact-title" style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head rv"><h2 class="h2 grad" id="impact-title">Что это даёт университету</h2><p class="lead">Оценка по демо-данным пяти подразделений АТУ.</p></div>
+      <div class="stats">
+        <div class="stat rv"><div class="v tnum" data-count="36" data-dec="0">36<small>т/год</small></div><p>пищевых отходов в учёте вместо бумажных журналов</p></div>
+        <div class="stat rv" style="--i:1"><div class="v tnum" data-count="92" data-dec="0">92<small>%</small></div><p>пригодного к переработке сейчас уходит на полигон</p></div>
+        <div class="stat rv" style="--i:2"><div class="v tnum" data-count="25" data-dec="0">25<small>т CO₂</small></div><p>в год можно не выбрасывать, перейдя на рекомендуемые способы</p></div>
+        <div class="stat rv" style="--i:3"><div class="v tnum" data-count="48" data-dec="0">48<small>ч/мес</small></div><p>экономии на заполнении и сведении отчётов</p></div>
+      </div>
+      <p class="note">Демо-данные синтетические (июль–ноябрь 2026). Коэффициенты CO₂: DEFRA / BEIS 2024, справочник организаторов. Экономия времени — оценка команды.</p>
+    </div>
+  </section>
+
+  <section class="cta" id="start" aria-labelledby="start-title">
+    <div class="shafts" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="wrap">
+      <div class="cta-box rv">
+        <div><h2 class="h2 grad" id="start-title">Попробуйте на демо-данных</h2>
+          <p class="lead" style="margin-top:14px">Выберите роль: система откроется сразу с нужным экраном.</p>
+          <div class="acts"><a class="btn btn-primary btn-lg" href="/app#/login">Открыть систему <svg class="i i-arr"><use href="#arr"/></svg></a><a class="btn btn-ghost btn-lg" href="https://t.me/atufoodwastebot" rel="noopener"><svg class="i"><use href="#send"/></svg>Telegram-бот</a></div></div>
+        <div class="roles">
+          <a class="role" href="/app#/login?demo=iskander@atu.kz"><span class="ic"><svg class="i"><use href="#phone"/></svg></span><span><b>Ответственное лицо</b><small>ввод со смартфона</small></span><svg class="i go"><use href="#arr"/></svg></a>
+          <a class="role" href="/app#/login?demo=reviewer@atu.kz"><span class="ic"><svg class="i"><use href="#check"/></svg></span><span><b>Проверяющий</b><small>приём и возврат отчётов</small></span><svg class="i go"><use href="#arr"/></svg></a>
+          <a class="role" href="/app#/login?demo=director@atu.kz"><span class="ic"><svg class="i"><use href="#chart"/></svg></span><span><b>Руководство</b><small>аналитика и заключение</small></span><svg class="i go"><use href="#arr"/></svg></a>
+          <a class="role" href="/app#/login?demo=admin@atu.kz"><span class="ic"><svg class="i"><use href="#gear"/></svg></span><span><b>Администратор</b><small>справочники и отрасль</small></span><svg class="i go"><use href="#arr"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap"><span>EcoTrack · хакатон ATU «Smart Food Industries», трек 1 · 2026</span><span>Демо-пароль для всех ролей: demo123</span></div></footer>
+
+<script>
+(function () {
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // навигация: после 40px прокрутки бренд и кнопки собираются в пилюлю
+  var hdr = document.getElementById('hdr');
+  var pill = hdr.querySelector('.nav-pill');
+  function spread() { var w = innerWidth; pill.style.setProperty('--spread', w >= 960 ? Math.max(0, (w - 940) / 2 - 24) + 'px' : '0px'); }
+  function onScroll() { hdr.classList.toggle('is-scrolled', scrollY > 40); tilt(); }
+  // карточка продукта выпрямляется при прокрутке
+  var card = document.getElementById('tilt');
+  function tilt() {
+    if (reduce) return;
+    var r = card.getBoundingClientRect(); var p = Math.min(1, Math.max(0, (innerHeight - r.top) / (innerHeight * 0.9)));
+    card.style.setProperty('--rx', (20 * (1 - p)).toFixed(2) + 'deg');
+  }
+  spread(); onScroll();
+  addEventListener('resize', spread); addEventListener('scroll', function () { requestAnimationFrame(onScroll); }, { passive: true });
+  // появление блоков (контент виден и без скрипта)
+  var rv = [].slice.call(document.querySelectorAll('.rv'));
+  if (!('IntersectionObserver' in window) || reduce) rv.forEach(function (e) { e.classList.add('in'); });
+  else {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); if (e.target.querySelector('[data-count]') || e.target.dataset.count) count(e.target); } }); }, { rootMargin: '0px 0px -6%' });
+    rv.forEach(function (e) { io.observe(e); });
+    function net() { rv.forEach(function (e) { var r = e.getBoundingClientRect(); if (r.top < innerHeight && r.bottom > 0) e.classList.add('in'); }); }
+    addEventListener('load', net); setTimeout(net, 1200);
+  }
+  // счётчики «набегают» один раз
+  function count(root) {
+    root.querySelectorAll('[data-count]').forEach(function (el) {
+      if (el.dataset.done || reduce) return; el.dataset.done = 1;
+      var to = +el.dataset.count, small = el.querySelector('small'), t0 = performance.now();
+      function f(t) { var k = Math.min(1, (t - t0) / 1400), v = Math.round(to * (1 - Math.pow(1 - k, 3)));
+        el.firstChild.nodeValue = v.toLocaleString('ru-RU'); if (k < 1) requestAnimationFrame(f); }
+      if (el.firstChild && el.firstChild.nodeType === 3) requestAnimationFrame(f);
+      if (small) el.appendChild(small);
+    });
+  }
+  // живой список: новая запись каждые 4,2 с, пока карточка на экране и вкладка видима
+  var FEED = [['a2', 'ИН', 'Пищевые отходы из зала', 'inn · Telegram', 'tbo', 'ТБО', '14,2 кг'], ['a4', 'КЦ', 'Картонная тара', 'canella · весы', 'ok', 'вторсырьё', '1,8 кг'],
+    ['a1', 'ИС', 'Очистки овощей', 'iskander · фраза', 'ac', 'компост', '17,9 кг'], ['a5', 'ТП', 'Мясные кости', 'tpp · форма', 'ac', 'биогаз', '2,6 кг'], ['a3', 'ИН', 'Обрезки мясопродуктов', 'inn · весы', 'tbo', 'ТБО', '3,1 кг']];
+  var rows = document.getElementById('rows'), cnt = document.getElementById('cnt'), cnt2 = document.getElementById('cnt2'), n = 47, i = 0, visible = true;
+  if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; }).observe(card);
+  if (!reduce) setInterval(function () {
+    if (!visible || document.hidden) return;
+    var f = FEED[i++ % FEED.length], now = new Date(), tm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    var d = document.createElement('div'); d.className = 'row new';
+    d.innerHTML = '<span class="av ' + f[0] + '">' + f[1] + '</span><span class="t"><b>' + f[2] + '</b><small>' + f[3] + ' · ' + tm + '</small></span><span class="tag ' + f[4] + ' m-hide">' + f[5] + '</span><span class="kg">' + f[6] + '</span>';
+    rows.querySelector('.sel') && rows.querySelector('.sel').classList.remove('sel');
+    rows.insertBefore(d, rows.firstChild); if (rows.children.length > 8) rows.removeChild(rows.lastChild);
+    n++; cnt.textContent = n + ' записей'; cnt2.textContent = n;
+  }, 4200);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "atu-waste", "runtimeExecutable": "node", "runtimeArgs": ["--no-warnings", "server.js"], "port": 3000 }
+  ]
+}

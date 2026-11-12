@@ -1,0 +1,26 @@
+{
+  "name": "atu-food-waste",
+  "version": "1.0.0",
+  "description": "Цифровая система управления пищевыми отходами университетского комплекса АО «АТУ»",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "seed": "node --no-warnings seed.js",
+    "tunnel": "cloudflared tunnel --url http://localhost:3000"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "animejs": "^3.2.2",
+    "chart.js": "^4.6.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.22.3",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "private": true
+}
