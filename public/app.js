@@ -16,8 +16,8 @@ const todayIso = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 
 const minDate = () => { const d = new Date(Date.now() + 5 * 3600e3); d.setUTCMonth(d.getUTCMonth() - 12); return d.toISOString().slice(0, 7) + '-01'; };
 const ROLE_RU = { resp: 'Ответственное лицо', reviewer: 'Проверяющий', admin: 'Администратор', manager: 'Руководство' };
 const STATUS_RU = { draft: 'черновик', submitted: 'отправлено', in_review: 'на проверке', accepted: 'принято', returned: 'возвращено', none: 'нет отчёта' };
-const ORG_COLORS = ['#1f6f4a', '#d08c00', '#1d5fa8', '#9b3d8f', '#c2410c', '#0f766e', '#6b7280'];
-const PIE_COLORS = ['#1f6f4a', '#2e8b5e', '#62b087', '#a3d4b6', '#d08c00', '#f0b648', '#1d5fa8', '#7aa7dd', '#9b3d8f', '#c2410c', '#9ca3af'];
+const ORG_COLORS = ['#3459a0', '#e0b100', '#1d5fa8', '#9b3d8f', '#c2410c', '#0f766e', '#6b7280'];
+const PIE_COLORS = ['#3459a0', '#3459a0', '#7fa0e0', '#b9cbee', '#e0b100', '#f2d64b', '#1d5fa8', '#7aa7dd', '#9b3d8f', '#c2410c', '#9ca3af'];
 
 // ---------- i18n (рус / қаз) ----------
 const I18N = {
@@ -676,8 +676,8 @@ async function pageMe(main) {
     <div class="card" id="tgCard"></div>`;
   telegramCard($('#tgCard'));
   S.charts.push(new Chart($('#cw'), { type: 'bar', data: { labels: s.week.byDay.map((d) => `${wd[new Date(d.date + 'T00:00:00').getDay()]} ${d.date.slice(8)}`),
-    datasets: [{ data: s.week.byDay.map((d) => d.kg), backgroundColor: '#23935d', borderRadius: 8, maxBarThickness: 34 }] },
-    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#eef1ee' } } } } }));
+    datasets: [{ data: s.week.byDay.map((d) => d.kg), backgroundColor: '#4a72c4', borderRadius: 8, maxBarThickness: 34 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: { color: '#eceff5' } } } } }));
 }
 
 async function pageRegistry(main, r) {
@@ -798,7 +798,7 @@ async function pageDashboard(main, r) {
   $('#range').onchange = (e) => go('/dashboard?' + new URLSearchParams({ range: e.target.value, ...(r.q.org ? { org: r.q.org } : {}) }));
   if ($('#org')) $('#org').onchange = (e) => go('/dashboard?' + new URLSearchParams({ range, ...(e.target.value ? { org: e.target.value } : {}) }));
 
-  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily; Chart.defaults.color = '#66756b';
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily; Chart.defaults.color = '#66728c';
   const labels = d.monthly.map((m) => m.label);
   S.charts.push(new Chart($('#c1'), { type: 'bar', data: { labels, datasets: d.orgs.map((o, i) => ({ label: o, data: d.monthly.map((m) => m.byOrg[o]), backgroundColor: ORG_COLORS[i % 7], borderRadius: 3 })) },
     options: { maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } }));
@@ -808,10 +808,10 @@ async function pageDashboard(main, r) {
     options: { maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: innerWidth < 720 ? 'bottom' : 'right', labels: { boxWidth: 12, font: { size: 11 } } } } } }));
   const c3 = staff && !r.q.org ? d.byOrg : d.byMethod;
   S.charts.push(new Chart($('#c3'), { type: 'bar', data: { labels: c3.map((x) => x.name), datasets: [{ label: 'кг', data: c3.map((x) => x.kg), backgroundColor: c3.map((_, i) => ORG_COLORS[i % 7]), borderRadius: 4 }] },
-    options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#eef1ee' } }, y: { grid: { display: false } } } } }));
+    options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#eceff5' } }, y: { grid: { display: false } } } } }));
   S.charts.push(new Chart($('#c4'), { type: 'line', data: { labels, datasets: [
-    { label: 'Пригодно к переработке', data: d.monthly.map((m) => m.kg ? m.recyclableShare : null), borderColor: '#2e8b5e', backgroundColor: 'rgba(46,139,94,.12)', fill: true, tension: .3 },
-    { label: 'Фактически переработано', data: d.monthly.map((m) => m.kg ? m.recycledShare : null), borderColor: '#d08c00', tension: .3 }] },
+    { label: 'Пригодно к переработке', data: d.monthly.map((m) => m.kg ? m.recyclableShare : null), borderColor: '#3459a0', backgroundColor: 'rgba(52,89,160,.12)', fill: true, tension: .3 },
+    { label: 'Фактически переработано', data: d.monthly.map((m) => m.kg ? m.recycledShare : null), borderColor: '#e0b100', tension: .3 }] },
     options: { maintainAspectRatio: false, scales: { y: { min: 0, max: 100, ticks: { callback: (v) => v + '%' } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } }));
 }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f2e22">
+  <meta name="theme-color" content="#15275a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -26,7 +26,7 @@
     // внутри Telegram: разворачиваем на весь экран и красим шапку в цвет бренда
     (function () { var tg = window.Telegram && window.Telegram.WebApp; if (!tg || !tg.initData) return;
       document.documentElement.classList.add('in-tg'); tg.ready(); tg.expand();
-      try { tg.setHeaderColor('#0f2e22'); tg.setBackgroundColor('#f3f5ef'); } catch (e) {}
+      try { tg.setHeaderColor('#15275a'); tg.setBackgroundColor('#f4f6fa'); } catch (e) {}
       // Telegram кладёт служебные параметры в #hash — возвращаем адрес нашего роутера
       if (/tgWebApp/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#/me'); })();
   </script>
