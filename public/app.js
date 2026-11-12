@@ -107,7 +107,7 @@ const go = (h) => { location.hash = h; };
 async function route() {
   S.charts.forEach((c) => c.destroy()); S.charts = [];
   const r = parseHash();
-  if (!S.cfg) { try { S.cfg = await api('/config'); } catch { S.cfg = { systemName: 'EcoTrack', company: '', orgLabel: 'Организация', orgsLabel: 'Организации', industryLabel: '' }; } }
+  if (!S.cfg) { try { S.cfg = await api('/config'); } catch { S.cfg = { systemName: 'Wasteless', company: '', orgLabel: 'Организация', orgsLabel: 'Организации', industryLabel: '' }; } }
   if (!S.user) {
     try { S.user = (await api('/me')).user; } catch { S.user = null; }
   }

@@ -123,7 +123,7 @@ function getSettings() {
   const ind = INDUSTRIES[s.industry] ? s.industry : 'university';
   return {
     industry: ind, industryLabel: INDUSTRIES[ind].label,
-    systemName: s.systemName || 'EcoTrack',
+    systemName: s.systemName || 'Wasteless',
     company: s.company || 'АО «Алматинский технологический университет»',
     orgLabel: s.orgLabel || INDUSTRIES[ind].orgLabel, orgsLabel: s.orgsLabel || INDUSTRIES[ind].orgsLabel,
     industries: Object.entries(INDUSTRIES).map(([k, v]) => ({ key: k, label: v.label, example: v.example, orgLabel: v.orgLabel })),

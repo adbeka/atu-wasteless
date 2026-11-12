@@ -118,7 +118,7 @@ async function buildSummaryXlsx(s) {
 // Журнал записей по произвольному срезу (реестр с фильтрами, «мой месяц», отчёт из Telegram)
 const SRC = { manual: 'форма', voice: 'фраза/голос', scale: 'весы', telegram: 'Telegram' };
 async function buildEntriesXlsx(rows, { title: heading, sub }) {
-  const wb = new ExcelJS.Workbook(); wb.creator = 'EcoTrack';
+  const wb = new ExcelJS.Workbook(); wb.creator = 'Wasteless';
   const ws = wb.addWorksheet('Журнал', { views: [{ state: 'frozen', ySplit: 4 }] });
   title(ws, heading, sub, 9);
   header(ws, 4, ['№', 'Дата', 'Подразделение', 'Наименование отходов', 'Вес (кг) / Объём (л)', 'Способ переработки / утилизации', 'CO₂-экв., кг', 'Ответственное лицо', 'Источник']);

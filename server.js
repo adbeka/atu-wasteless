@@ -26,13 +26,14 @@ const REF = require('./reference');
 
 let BOT = { state: { enabled: false }, notifyReport() {} };
 const app = express();
-app.set('trust proxy', 'loopback'); // за туннелем cloudflared: https и внешний адрес берутся из X-Forwarded-*
+// за прокси (cloudflared локально, Railway в облаке) https и внешний адрес берутся из X-Forwarded-*
+app.set('trust proxy', process.env.RAILWAY_ENVIRONMENT || process.env.TRUST_PROXY ? 1 : 'loopback');
 app.use(express.json({ limit: '6mb' }));
 app.use((req, _res, next) => {
   if (req.secure && BOT.setWebAppUrl) { const host = req.get('host') || ''; if (host && !/^(localhost|127\.)/.test(host)) BOT.setWebAppUrl(`https://${host}`); }
   next();
 });
-// «/» — лендинг (что такое EcoTrack), «/app» — само приложение. Старые ссылки /?tg=1 ведём в приложение.
+// «/» — лендинг (что такое Wasteless), «/app» — само приложение. Старые ссылки /?tg=1 ведём в приложение.
 const PUB = path.join(__dirname, 'public');
 app.get('/', (req, res) => (req.query.tg ? res.redirect('/app?tg=1') : res.sendFile(path.join(PUB, 'landing.html'))));
 app.get(['/welcome', '/about'], (_req, res) => res.redirect('/'));

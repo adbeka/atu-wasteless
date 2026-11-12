@@ -1,6 +1,6 @@
 {
-  "name": "EcoTrack · Учёт пищевых отходов",
-  "short_name": "EcoTrack",
+  "name": "Wasteless · Учёт пищевых отходов",
+  "short_name": "Wasteless",
   "description": "Ввод взвешиваний со смартфона, проверка отчётов, аналитика и CO₂",
   "start_url": "/app#/me",
   "scope": "/",

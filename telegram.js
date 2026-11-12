@@ -3,7 +3,8 @@
 const crypto = require('crypto');
 
 function start(deps) {
-  const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  // TELEGRAM_BOT_DISABLED=1 — не запускать бота в этом экземпляре (бот может работать только в одном месте: ноутбук ИЛИ Railway)
+  const TOKEN = process.env.TELEGRAM_BOT_DISABLED ? '' : process.env.TELEGRAM_BOT_TOKEN;
   const { db, A, AI, getOrCreateReport, reportFull, setStatus, validateEntry, EDITABLE, STATUS_RU, nowIso, buildEntriesXlsx, buildSummaryXlsx } = deps;
   const state = { enabled: !!TOKEN, username: null, error: null, webAppUrl: null };
   if (!TOKEN) return { state, notifyReport() {} };
@@ -186,7 +187,7 @@ ${top || 'нет данных'}${orgs}`;
     if (/^\/help/.test(text)) return send(chatId, u.role === 'resp' ? HELP : HELP_STAFF);
     if (/^\/app/.test(text)) {
       if (!state.webAppUrl) return send(chatId, 'Приложение доступно, когда сервер открыт по HTTPS (туннель). Сейчас пользуйтесь командами бота.');
-      return send(chatId, '📱 EcoTrack внутри Telegram — вход без пароля:', { reply_markup: { inline_keyboard: [[{ text: 'Открыть EcoTrack', web_app: { url: state.webAppUrl + '/app?tg=1' } }]] } });
+      return send(chatId, '📱 Wasteless внутри Telegram — вход без пароля:', { reply_markup: { inline_keyboard: [[{ text: 'Открыть Wasteless', web_app: { url: state.webAppUrl + '/app?tg=1' } }]] } });
     }
     if (/^\/week|^\/неделя/i.test(text)) return send(chatId, periodText(u, 'week'));
     if (/^\/quarter|^\/квартал/i.test(text)) return send(chatId, periodText(u, 'quarter'));
@@ -229,7 +230,7 @@ ${top || 'нет данных'}${orgs}`;
       await api('deleteWebhook', {});
       await api('setMyCommands', { commands: [{ command: 'itogi', description: 'Итоги за день и месяц' }, { command: 'week', description: 'Неделя: итоги и сравнение' },
         { command: 'quarter', description: 'Квартал к прошлому кварталу' }, { command: 'report', description: 'Excel-отчёт в чат' },
-        { command: 'send', description: 'Отправить отчёт на проверку' }, { command: 'app', description: 'Открыть приложение EcoTrack' }, { command: 'help', description: 'Подсказка' }] });
+        { command: 'send', description: 'Отправить отчёт на проверку' }, { command: 'app', description: 'Открыть приложение Wasteless' }, { command: 'help', description: 'Подсказка' }] });
       console.log(`Telegram-бот запущен: @${me.username}`);
     } catch (e) { state.error = e.message; console.error('[tg] не удалось запустить бота:', e.message); return; }
     let offset = 0;
@@ -241,15 +242,21 @@ ${top || 'нет данных'}${orgs}`;
           try { if (up.message) await onMessage(up.message); else if (up.callback_query) await onCallback(up.callback_query); }
           catch (e) { console.error('[tg] обработка:', e.message); }
         }
-      } catch (e) { state.error = e.message; await new Promise((r) => setTimeout(r, 3000)); }
+      } catch (e) {
+        state.error = e.message;
+        // 409 Conflict: тот же бот уже запущен в другом месте (например, на Railway) — не спамим и ждём дольше
+        const conflict = /conflict|terminated by other getUpdates/i.test(e.message);
+        if (conflict && !state.conflictLogged) { console.error('[tg] этот бот уже запущен в другом экземпляре — здесь он ждёт. Чтобы отключить: TELEGRAM_BOT_DISABLED=1'); state.conflictLogged = true; }
+        await new Promise((r) => setTimeout(r, conflict ? 30000 : 3000));
+      }
     }
   })();
 
-  // мини-приложение: кнопка меню бота открывает EcoTrack внутри Telegram (только HTTPS — через туннель или PUBLIC_URL)
+  // мини-приложение: кнопка меню бота открывает Wasteless внутри Telegram (только HTTPS — через туннель или PUBLIC_URL)
   async function setWebAppUrl(url) {
     if (!/^https:\/\//.test(url || '') || state.webAppUrl === url || !state.username) return;
     state.webAppUrl = url;
-    try { await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'EcoTrack', web_app: { url: url + '/app?tg=1' } } }); console.log(`[tg] мини-приложение: ${url}`); }
+    try { await api('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Wasteless', web_app: { url: url + '/app?tg=1' } } }); console.log(`[tg] мини-приложение: ${url}`); }
     catch (e) { state.webAppUrl = null; console.error('[tg] menu button:', e.message); }
   }
   setTimeout(() => { if (process.env.PUBLIC_URL) setWebAppUrl(process.env.PUBLIC_URL.replace(/\/$/, '')); }, 3000);
