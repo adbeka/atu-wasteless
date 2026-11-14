@@ -96,7 +96,7 @@ const auth = (...roles) => (req, res, next) => {
 };
 const platformOnly = (req, res, next) => (req.user?.platform ? next() : bad(res, 'Общие справочники платформы меняет только её владелец', 403));
 // демо — только просмотр: любые изменения запрещены (кроме выхода и языка интерфейса)
-const DEMO_ALLOWED = new Set(['/api/logout', '/api/me/lang', '/api/ai/parse']);
+const DEMO_ALLOWED = new Set(['/api/logout', '/api/me/lang', '/api/ai/parse', '/api/login', '/api/register', '/api/join', '/api/demo', '/api/telegram/webapp-login']);
 app.use('/api', (req, res, next) => {
   if (req.method !== 'GET' && req.user?.demo && !DEMO_ALLOWED.has(req.baseUrl + req.path)) {
     return bad(res, 'Демо — только для просмотра. Зарегистрируйтесь бесплатно, чтобы вносить свои данные.', 403, { demo: true });
@@ -213,7 +213,7 @@ function lanUrl() {
   }
   return `http://localhost:${PORT}`;
 }
-app.get('/api/info', (req, res) => res.json({ lanUrl: lanUrl(), publicUrl: publicUrl(req), anomalyPct: A.ANOMALY_PCT, today: A.today() }));
+app.get('/api/info', (req, res) => res.json({ lanUrl: lanUrl(), publicUrl: publicUrl(req), anomalyPct: A.ANOMALY_PCT, today: A.today(), db: db.kind, bot: !!BOT.state.username }));
 
 // ---------- доступ к данным своей компании ----------
 const T = (req) => req.user.tenant_id;
