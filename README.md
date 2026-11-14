@@ -110,6 +110,8 @@ npm start
 
 ## Облако: Railway
 
+Рабочая версия: **https://wasteless.up.railway.app** (лендинг), приложение — https://wasteless.up.railway.app/app, эко-калькулятор без входа — https://wasteless.up.railway.app/app#/eco.
+
 Репозиторий подключён к Railway: каждый push в `main` автоматически пересобирает и перезапускает сервис.
 - Нужен Node.js 22: версия закреплена в `.node-version` и `engines`. Порт берётся из `PORT`.
 - За прокси Railway сервер сам доверяет `X-Forwarded-*`, поэтому HTTPS, cookie `Secure` и QR-коды работают с публичным доменом. При желании адрес можно задать явно переменной `PUBLIC_URL`.
