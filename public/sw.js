@@ -1,7 +1,7 @@
 // Wasteless · работа без сети. Сначала сеть, при её отсутствии — кэш.
 // Оболочка приложения и справочники (виды отходов, способы, продукты, мой отчёт) доступны офлайн;
 // новые записи без сети складываются в очередь на телефоне (app.js) и уходят на сервер, когда сеть появится.
-const CACHE = 'wasteless-v3';
+const CACHE = 'wasteless-v4';
 const SHELL = ['/app', '/app.js', '/styles.css', '/vendor/chart.js', '/vendor/anime.min.js', '/icon.svg', '/icon-192.png', '/manifest.json'];
 const API_CACHE = /^\/api\/(me|config|info|waste-types|methods|products|my-report|my-summary|orgs|goals\/me|rating)(\?|$)/;
 

@@ -14,7 +14,7 @@ const monthName = (ym) => `${MONTHS[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
 // «сегодня» по Алматы (UTC+5) — так же, как на сервере
 const todayIso = () => new Date(Date.now() + 5 * 3600e3).toISOString().slice(0, 10);
 const minDate = () => { const d = new Date(Date.now() + 5 * 3600e3); d.setUTCMonth(d.getUTCMonth() - 12); return d.toISOString().slice(0, 7) + '-01'; };
-const ROLE_RU = { resp: 'Ответственное лицо', reviewer: 'Проверяющий', admin: 'Администратор', manager: 'Руководство' };
+const ROLE_RU = { resp: 'Ответственное лицо', reviewer: 'Проверяющий', admin: 'Администратор', manager: 'Руководство', personal: 'Личный аккаунт' };
 const STATUS_RU = { draft: 'черновик', submitted: 'отправлено', in_review: 'на проверке', accepted: 'принято', returned: 'возвращено', none: 'нет отчёта' };
 const ORG_COLORS = ['#3459a0', '#e0b100', '#1d5fa8', '#9b3d8f', '#c2410c', '#0f766e', '#6b7280'];
 const PIE_COLORS = ['#3459a0', '#3459a0', '#7fa0e0', '#b9cbee', '#e0b100', '#f2d64b', '#1d5fa8', '#7aa7dd', '#9b3d8f', '#c2410c', '#9ca3af'];
@@ -296,11 +296,12 @@ function toast(msg, err) {
     setTimeout(() => anime({ targets: t, opacity: 0, translateY: 12, translateX: ['-50%', '-50%'], duration: 260, easing: 'easeInQuad', complete: () => t.remove() }), err ? 5000 : 2600);
   } else setTimeout(() => t.remove(), err ? 5000 : 2600);
 }
-function modal(html, onMount) {
+function modal(html, onMount, onClose) {
   const bg = document.createElement('div'); bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal">${html}</div>`;
-  bg.addEventListener('click', (e) => { if (e.target === bg || e.target.closest('[data-close]')) bg.remove(); });
-  document.body.appendChild(bg); onMount?.(bg.firstElementChild, () => bg.remove());
+  const close = () => { bg.remove(); onClose?.(); };
+  bg.addEventListener('click', (e) => { if (e.target === bg || e.target.closest('[data-close]')) close(); });
+  document.body.appendChild(bg); onMount?.(bg.firstElementChild, close);
   return bg;
 }
 const CAT = { organic: { ic: '🥕', label: 'Органические' }, recyclable: { ic: '♻️', label: 'Вторсырьё' }, special: { ic: '🛢️', label: 'Специальные' }, mixed: { ic: '📦', label: 'Смешанные' } };
@@ -311,9 +312,10 @@ const buzz = (ms = 12) => { try { navigator.vibrate?.(ms); } catch {} };
 // карточка подключения Telegram-бота (для ответственного лица — ввод из мессенджера, для всех — уведомления)
 async function telegramCard(el) {
   let st; try { st = await api('/telegram/status'); } catch { return; }
+  if (!el || !el.isConnected) return; // пользователь уже ушёл на другую страницу
   const tg = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="#fff" d="M9.8 15.6 9.6 19c.4 0 .6-.2.8-.4l2-1.9 4.1 3c.8.4 1.3.2 1.5-.7l2.7-12.7c.3-1.1-.4-1.6-1.2-1.3L3.6 10.9c-1.1.4-1.1 1-.2 1.3l4.1 1.3 9.6-6c.4-.3.9-.1.5.2"/></svg>';
   el.innerHTML = `<div class="tg-card"><div class="tg-ic">${tg}</div><div class="tg-t"><b>Telegram-бот</b>
-      <small>${st.linked ? `Подключено${st.username ? ' · @' + esc(st.username) : ''} — пишите боту «отходы из зала 12 кг»` : st.enabled ? 'Вносите взвешивания сообщением, получайте уведомления о проверке' : 'Бот не настроен на сервере (TELEGRAM_BOT_TOKEN)'}</small></div>
+      <small>${st.linked ? `Подключено${st.username ? ' · @' + esc(st.username) : ''} — пишите боту «отходы из зала 12 кг»` : st.enabled ? 'Вносите взвешивания сообщением, получайте уведомления о проверке' : T('Telegram-бот временно недоступен — попробуйте позже')}</small></div>
     ${st.linked ? `<a class="btn btn-sm btn-light" href="https://t.me/${esc(st.username || '')}" target="_blank" rel="noopener">Открыть</a><button class="btn-sm icon-btn" id="tgOff" title="Отключить">✕</button>`
       : `<button class="btn-sm" id="tgOn" ${st.username ? '' : 'disabled'}>Подключить</button>`}</div>`;
   $('#tgOn', el)?.addEventListener('click', async () => {
@@ -337,10 +339,11 @@ const chip = (st, label) => `<span class="chip st-${esc(st)}">${esc(T(label || S
 // ---------- state & router ----------
 const S = { user: null, charts: [] };
 const NAV = {
-  resp: [['me', 'Моя сводка', '◉'], ['form', 'Ввод', '✎'], ['plan', 'План', '🍳'], ['rating', 'Рейтинг', '★'], ['my-reports', 'Мои отчёты', '☰'], ['dashboard', 'Аналитика', '▤'], ['eco', 'Своя кружка', '☕']],
-  reviewer: [['reports', 'Отчёты', '✓'], ['registry', 'Реестр', '☰'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕']],
-  manager: [['dashboard', 'Аналитика', '▤'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['summary', 'Сводный отчёт', '⇩'], ['registry', 'Реестр', '☰'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕']],
-  admin: [['admin', 'Администрирование', '⚙'], ['reports', 'Отчёты', '✓'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['registry', 'Реестр', '☰'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕']],
+  resp: [['me', 'Моя сводка', '◉'], ['form', 'Ввод', '✎'], ['plan', 'План', '🍳'], ['rating', 'Рейтинг', '★'], ['my-reports', 'Мои отчёты', '☰'], ['dashboard', 'Аналитика', '▤'], ['eco', 'Своя кружка', '☕'], ['profile', 'Профиль', '☺']],
+  reviewer: [['reports', 'Отчёты', '✓'], ['registry', 'Реестр', '☰'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕'], ['profile', 'Профиль', '☺']],
+  manager: [['dashboard', 'Аналитика', '▤'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['summary', 'Сводный отчёт', '⇩'], ['registry', 'Реестр', '☰'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕'], ['profile', 'Профиль', '☺']],
+  personal: [['me', 'Моя сводка', '◉'], ['form', 'Ввод', '✎'], ['dashboard', 'Аналитика', '▤'], ['eco', 'Своя кружка', '☕'], ['profile', 'Профиль', '☺']],
+  admin: [['admin', 'Администрирование', '⚙'], ['reports', 'Отчёты', '✓'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['registry', 'Реестр', '☰'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕'], ['profile', 'Профиль', '☺']],
 };
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, '');
@@ -357,13 +360,15 @@ async function route() {
   if (!S.user) {
     try { S.user = (await api('/me')).user; } catch { S.user = null; }
   }
+  if (r.page === 'join') return renderJoin(r);
   // мини-приложение Telegram: вход по подписанным данным Telegram, без пароля
   const TG = window.Telegram?.WebApp;
   if (!S.user && TG?.initData && !S.tgTried) {
     S.tgTried = true;
-    try { await api('/telegram/webapp-login', { method: 'POST', body: { initData: TG.initData } }); S.user = (await api('/me')).user; }
-    catch (e) { toast(e.message, true); }
+    try { await api('/telegram/webapp-login', { method: 'POST', body: { initData: TG.initData } }); S.user = (await api('/me')).user; S.cfg = await api('/config'); }
+    catch (e) { if (e.data?.needLink) { S.tgInfo = e.data; } else toast(e.message, true); }
   }
+  if (!S.user && S.tgInfo && !S.tgSkip && !['login', 'register', 'eco'].includes(r.page)) return renderTgWelcome(S.tgInfo);
   if (!S.user) {
     if (r.page === 'register') return renderRegister(r);
     if (r.page === 'eco') { // эко-калькулятор открыт всем (QR на кассе кофейни), без входа
@@ -379,9 +384,9 @@ async function route() {
   shell(r.page);
   const main = $('main');
   const pages = { me: pageMe, form: pageForm, 'my-reports': pageReports, reports: pageReports, report: pageReport, registry: pageRegistry,
-    summary: pageSummary, dashboard: pageDashboard, control: pageControl, admin: pageAdmin, rating: pageRating, plan: pagePlan, eco: pageEco };
+    summary: pageSummary, dashboard: pageDashboard, control: pageControl, admin: pageAdmin, rating: pageRating, plan: pagePlan, eco: pageEco, profile: pageProfile };
   const fn = pages[r.page];
-  if (!fn) { main.innerHTML = '<div class="card">Страница не найдена</div>'; return; }
+  if (!fn || !NAV[S.user.role].some(([k]) => k === r.page || (r.page === 'report' && ['reports', 'my-reports'].includes(k)))) { main.innerHTML = `<div class="card">${T('Страница не найдена')}</div>`; return; }
   try { await fn(main, r); animateIn(main); } catch (e) { main.innerHTML = `<div class="alert alert-red">${esc(e.message)}</div>`; if (e.status === 401) { S.user = null; route(); } }
 }
 window.addEventListener('hashchange', route);
@@ -402,6 +407,7 @@ const ICONS = {
 ICONS.trophy = '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>';
 ICONS.chef = '<path d="M6 13.9A4 4 0 1 1 8.4 6a4.5 4.5 0 0 1 7.2 0A4 4 0 1 1 18 13.9V20H6Z"/><path d="M6 17h12"/>';
 ICONS.cup = '<path d="M17 8h1a3 3 0 0 1 0 6h-1"/><path d="M3 8h14v7a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5Z"/><path d="M7 2v3M11 2v3M15 2v3"/>';
+ICONS.user = '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>';
 ICONS.arrow = '<path d="M5 12h14M13 6l6 6-6 6"/>';
 const icon = (n) => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
 
@@ -448,7 +454,7 @@ function animateLogin() {
   });
 }
 const LOGO = `<div class="logo"><svg viewBox="0 0 24 24">${ICONS.leaf}</svg></div>`;
-const NAV_ICON = { plan: 'chef', eco: 'cup', rating: 'trophy', me: 'leaf', form: 'edit', 'my-reports': 'list', dashboard: 'chart', reports: 'check', registry: 'db', summary: 'file', control: 'alert', admin: 'gear' };
+const NAV_ICON = { profile: 'user', plan: 'chef', eco: 'cup', rating: 'trophy', me: 'leaf', form: 'edit', 'my-reports': 'list', dashboard: 'chart', reports: 'check', registry: 'db', summary: 'file', control: 'alert', admin: 'gear' };
 const initials = (n) => String(n).split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 function shell(page) {
@@ -459,21 +465,23 @@ function shell(page) {
   $('#app').innerHTML = `
   <div class="layout">
     <aside class="sidebar">
-      <div class="brand">${LOGO}<div><b>${esc(S.cfg.systemName)}</b><small>${esc(S.cfg.company)}</small></div></div>
-      <div class="nav-group">${S.user.role === 'resp' ? esc(S.user.org_short || '') : esc(S.cfg.industryLabel)}</div>
+      <div class="brand">${LOGO}<div><b>${esc(S.cfg.systemName)}</b><small>${esc(S.user.role === 'personal' ? T('Личный учёт') : S.cfg.company)}</small></div></div>
+      <div class="nav-group">${S.user.role === 'resp' ? esc(S.user.org_short || '') : S.user.role === 'personal' ? esc(T('Моя кухня')) : esc(S.cfg.industryLabel)}</div>
       <nav class="side-nav">${navHtml}</nav>
       <div class="side-foot">
-        <div class="me"><div class="avatar">${esc(initials(S.user.full_name))}</div><div><b>${esc(S.user.full_name)}</b><small>${esc(T(ROLE_RU[S.user.role]))}</small></div></div>
+        <a class="me" href="#/profile" style="color:inherit;text-decoration:none"><div class="avatar">${esc(initials(S.user.full_name))}</div><div><b>${esc(S.user.full_name)}</b><small>${esc(T(ROLE_RU[S.user.role]))}</small></div></a>
         <div class="side-actions">${lang(false)}<button class="btn-ghost-light" data-logout>${icon('out')}${T('Выйти')}</button></div>
       </div>
     </aside>
     <div style="min-width:0">
-      <header class="topbar"><div class="brand">${LOGO}<div><b>${esc(S.user.org_short || S.cfg.systemName)}</b></div></div>
-        ${lang(true)}<button class="btn-ghost-light" data-logout title="${T('Выйти')}">${icon('out')}</button></header>
+      <header class="topbar"><div class="brand">${LOGO}<div><b>${esc(S.user.role === 'personal' ? 'Wasteless' : S.user.org_short || S.cfg.systemName)}</b></div></div>
+        ${lang(true)}<a class="btn-ghost-light" href="#/profile" title="${T('Профиль')}" style="display:inline-flex;align-items:center;padding:8px">${icon('user')}</a><button class="btn-ghost-light" data-logout title="${T('Выйти')}">${icon('out')}</button></header>
+      ${S.user.demo ? `<div class="demo-bar">👀 ${T('Демо-режим: только просмотр.')} <a href="#" id="demoReg">${T('Создать свой аккаунт бесплатно')} →</a></div>` : ''}
       <main></main>
     </div>
   </div>
   <nav class="bottom-nav">${links.slice(0, 5).map((l) => `<a href="#/${l.k}" class="${l.active ? 'active' : ''}">${icon(NAV_ICON[l.k])}${esc(l.label.split(' ')[0])}</a>`).join('')}</nav>`;
+  $('#demoReg')?.addEventListener('click', async (e) => { e.preventDefault(); await api('/logout', { method: 'POST' }).catch(() => {}); S.user = null; go('/register'); });
   $$('[data-logout]').forEach((b) => b.onclick = async () => {
     if (Q.all().length && !confirm(T('В очереди есть неотправленные записи. Они останутся на телефоне и уйдут после следующего входа. Выйти?'))) return;
     try { await api('/logout', { method: 'POST' }); } catch {}
@@ -483,100 +491,187 @@ function shell(page) {
   $$('[data-lang]').forEach((b) => b.onclick = () => { LANG = b.dataset.lang; localStorage.setItem('lang', LANG); api('/me/lang', { method: 'PUT', body: { lang: LANG } }).catch(() => {}); route(); });
 }
 
-// ---------- login / register ----------
-const role = (email, ic, title, sub, tone) => `<button type="button" class="role tone-${tone}" data-demo="${email}">
-  <span class="role-ic">${icon(ic)}</span><span class="role-t"><b>${title}</b><small>${sub}</small></span><span class="role-go">${icon('arrow')}</span></button>`;
-
-async function renderLogin(r) {
-  let orgName = '';
-  if (r.q.org) { try { orgName = (await api('/orgs')).find((o) => o.id === +r.q.org)?.name || ''; } catch {} }
+// ---------- вход, регистрация, приглашение ----------
+const INDUSTRY_OPTS = [['horeca', 'Общепит: кафе, ресторан, столовая'], ['university', 'Университет / кампус'], ['food', 'Пищевое производство'], ['retail', 'Розничная торговля']];
+const DEMO_ROLES = [['manager', 'chart', 'Руководство', 'аналитика, CO₂, заключение'], ['resp', 'edit', 'Ответственное лицо', 'ввод со смартфона, план, сводка'],
+  ['reviewer', 'check', 'Проверяющий', 'проверка и возврат отчётов'], ['admin', 'gear', 'Администратор', 'подразделения, приглашения, справочники']];
+const authShell = (inner) => {
   const feat = (ic, b, t) => `<div class="feat"><div class="logo"><svg viewBox="0 0 24 24">${ICONS[ic]}</svg></div><div><b>${b}</b><span>${t}</span></div></div>`;
-  $('#app').innerHTML = `
-  <div class="login">
+  return `<div class="login">
     <section class="login-art">
       <div class="orbs" aria-hidden="true"><span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span>
         <svg class="rings" viewBox="0 0 400 400"><circle cx="200" cy="200" r="120"/><circle cx="200" cy="200" r="160"/><circle cx="200" cy="200" r="198"/></svg></div>
-      <div class="brand">${LOGO}<div><b>${esc(S.cfg.systemName)}</b><small>${esc(S.cfg.company)}</small></div></div>
-      <div><div class="eyebrow" style="color:var(--lime)">Цифровой учёт пищевых отходов · ЦУР 12.3</div>
-        <h1>От бумажного журнала к отчёту и выводам — за минуту</h1>
-        <p class="lead">Взвешивание со смартфона, проверка отчёта, единый реестр, CO₂ по DEFRA и автоматические рекомендации, как сократить потери.</p></div>
+      <div class="brand">${LOGO}<div><b>Wasteless</b><small>${T('учёт пищевых отходов')}</small></div></div>
+      <div><div class="eyebrow" style="color:var(--lime)">${T('Меньше выбрасывать — меньше тратить · ЦУР 12.3')}</div>
+        <h1>${T('Учёт пищевых отходов для компаний и дома')}</h1>
+        <p class="lead">${T('Взвешивание со смартфона, фразой, по фото или в Telegram. Сколько это в тенге и CO₂, прогноз «сколько готовить» и советы, как выбрасывать меньше.')}</p></div>
       <div class="feats">
-        ${feat('edit', 'Ввод за 3 касания', 'плитки видов отходов, фраза или голос, электронные весы по API')}
-        ${feat('check', 'Проверка и статусы', 'черновик → отправлено → на проверке → принято / возвращено')}
-        ${feat('spark', 'Автовыводы и заключение ИИ', 'отклонения, потенциал переработки, потери в ₸, путь к ЦУР 12.3')}
-        ${feat('db', 'Под любую отрасль', 'университет, пищевое производство, общепит, ритейл — справочник из Excel')}
+        ${feat('edit', T('Ввод за 3 касания'), T('фраза, фото, весы, Telegram — даже без интернета'))}
+        ${feat('chef', T('Прогноз «сколько готовить»'), T('по спросу дня недели — меньше перепроизводства'))}
+        ${feat('check', T('Команда и отчёты'), T('приглашения сотрудников, роли, проверка и единый реестр'))}
+        ${feat('leaf', T('Для себя'), T('домашний учёт: тенге, CO₂ и недельная сводка в Telegram'))}
       </div>
     </section>
-    <section class="login-form"><div class="login-card">
-      ${orgName ? `<div class="alert alert-green">Форма учёта: <b>${esc(orgName)}</b>. Войдите, чтобы внести взвешивание.</div>` : ''}
-      <div class="card login-panel">
-        <h2 style="margin-bottom:4px">${T('Вход в систему')}</h2>
-        <p class="small muted" style="margin:0 0 14px">Выберите роль — система откроется сразу с нужным экраном</p>
-        <div class="seg" role="tablist"><span class="seg-pill"></span>
-          <button type="button" class="on" data-seg="quick">Быстрый вход</button><button type="button" data-seg="mail">По e-mail</button></div>
-        <div data-pane="quick">
-          <div class="roles">
-            ${role('iskander@atu.kz', 'edit', 'Ответственное лицо', 'Столовая «Искандер» · ввод со смартфона', 'lime')}
-            ${role('reviewer@atu.kz', 'check', 'Проверяющий', 'эколог · принимает и возвращает отчёты', 'blue')}
-            ${role('director@atu.kz', 'chart', 'Руководство', 'аналитика, CO₂, заключение', 'violet')}
-            ${role('admin@atu.kz', 'gear', 'Администратор', 'подразделения, справочники, отрасль', 'amber')}
-          </div>
-          <div class="orgs-title">Другие ответственные лица</div>
-          <div class="org-chips">
-            ${[['inn@atu.kz', 'ATU INN'], ['canella@atu.kz', 'Кофейня Canella'], ['tpp@atu.kz', 'Кафедра ТПП'], ['thipp@atu.kz', 'Кафедра ТХиПП']]
-              .map(([e, n]) => `<button type="button" class="chip-org" data-demo="${e}"><span>${esc(initials(n.replace(/[«»]/g, '')))}</span>${esc(n)}</button>`).join('')}
-          </div>
-          <p class="demo-note">🔑 Демо-пароль для всех ролей — <code>demo123</code> · <a href="/">О системе</a></p>
-        </div>
-        <form id="lf" data-pane="mail" class="hidden">
-          <div class="field"><label>E-mail</label><input name="email" type="email" autocomplete="username" required></div>
-          <div class="field"><label>${T('Пароль')}</label><input name="password" type="password" autocomplete="current-password" required></div>
-          <button class="btn-lg">${T('Войти')}</button>
-          <p class="small" style="text-align:center;margin:12px 0 0">Нет учётной записи? <a href="#/register${r.q.org ? '?org=' + esc(r.q.org) : ''}">${T('Регистрация')}</a></p>
-        </form>
-      </div>
-    </div></section>
+    <section class="login-form"><div class="login-card">${inner}</div></section>
   </div>`;
+};
+const consentNote = () => `<p class="small muted" style="margin:8px 0 12px">${T('Регистрируясь, вы соглашаетесь на обработку имени и e-mail для работы сервиса (Закон РК «О персональных данных и их защите»). Данные компании видны только её сотрудникам.')}</p>`;
+const pwField = (name = 'password', label = 'Пароль') => `<div class="field"><label>${T(label)} <span class="muted small">(${T('от 8 символов, буквы и цифры')})</span></label>
+  <div class="pw-row"><input name="${name}" type="password" minlength="8" autocomplete="new-password" required><button type="button" class="icon-btn" data-eye title="${T('Показать')}">👁</button></div></div>`;
+const bindEyes = (root = document) => $$('[data-eye]', root).forEach((b) => b.onclick = () => { const i = b.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; });
+const afterAuth = async (r) => { S.user = (await api('/me')).user; S.cfg = await api('/config'); go(r?.q?.org && isEntryRole() ? '/form' : '/' + NAV[S.user.role][0][0]); route(); };
+const isEntryRole = () => ['resp', 'personal'].includes(S.user?.role);
+
+async function renderLogin(r, tab = r.page === 'register' ? 'register' : 'login') {
+  $('#app').innerHTML = authShell(`
+      ${r.q.org ? `<div class="alert alert-green">${T('Войдите, чтобы внести взвешивание по QR-коду подразделения.')}</div>` : ''}
+      <div class="card login-panel">
+        <div class="seg" role="tablist"><span class="seg-pill"></span>
+          <button type="button" data-seg="login">${T('Вход')}</button><button type="button" data-seg="register">${T('Регистрация')}</button></div>
+        <form id="lf" data-pane="login">
+          <div class="field"><label>E-mail</label><input name="email" type="email" autocomplete="username" required></div>
+          <div class="field"><label>${T('Пароль')}</label><div class="pw-row"><input name="password" type="password" autocomplete="current-password" required><button type="button" class="icon-btn" data-eye>👁</button></div></div>
+          <button class="btn-lg">${T('Войти')}</button>
+          <p class="small" style="text-align:center;margin:10px 0 0"><a href="#" id="forgot">${T('Забыли пароль?')}</a></p>
+        </form>
+        <div data-pane="register" class="hidden">
+          <div class="kind-pick">
+            <button type="button" class="kind on" data-kind="personal"><b>🏠 ${T('Для себя')}</b><small>${T('домашний учёт, бесплатно')}</small></button>
+            <button type="button" class="kind" data-kind="company"><b>🏢 ${T('Для компании')}</b><small>${T('кафе, столовая, производство, вуз')}</small></button>
+          </div>
+          <form id="rf">
+            <div data-only="company" class="hidden">
+              <div class="field"><label>${T('Название компании')}</label><input name="company" placeholder="${T('напр. ТОО «Вкусная кухня»')}"></div>
+              <div class="field"><label>${T('Отрасль')}</label><select name="industry">${INDUSTRY_OPTS.map(([k, l]) => `<option value="${k}">${T(l)}</option>`).join('')}</select></div>
+              <div class="field"><label>${T('Первое подразделение')}</label><input name="org_name" placeholder="${T('напр. Кафе на Абая или Столовая корпус 1')}"></div>
+            </div>
+            <div class="field"><label>${T('Ваше имя')}</label><input name="full_name" autocomplete="name" required></div>
+            <div class="field"><label>E-mail</label><input name="email" type="email" autocomplete="email" required></div>
+            ${pwField()}
+            ${consentNote()}
+            <button class="btn-lg" id="rfBtn">${T('Создать аккаунт')}</button>
+          </form>
+        </div>
+      </div>
+      <div class="card demo-box">
+        <button type="button" class="btn-light btn-lg" id="demoBtn">👀 ${T('Посмотреть демо')} <span class="small muted">· ${T('без регистрации')}</span></button>
+        <div id="demoRoles" class="hidden"><p class="small muted" style="margin:10px 0">${T('Демо-компания: университет с 5 подразделениями, данные за 4 месяца. Только просмотр.')}</p>
+          <div class="roles">${DEMO_ROLES.map(([k, ic, t, sub], i) => `<button type="button" class="role tone-${['violet', 'lime', 'blue', 'amber'][i]}" data-demo="${k}"><span class="role-ic">${icon(ic)}</span><span class="role-t"><b>${T(t)}</b><small>${T(sub)}</small></span><span class="role-go">${icon('arrow')}</span></button>`).join('')}</div></div>
+      </div>
+      <p class="small muted" style="text-align:center"><a href="/">${T('О сервисе')}</a> · <a href="#/eco">${T('Калькулятор «Своя кружка»')}</a>${S.cfg.bot ? ` · <a href="https://t.me/${esc(S.cfg.bot)}" target="_blank" rel="noopener">Telegram-бот</a>` : ''}</p>`);
+  let kind = 'personal';
   const seg = (k) => {
     $$('[data-seg]').forEach((b) => b.classList.toggle('on', b.dataset.seg === k));
     $$('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== k));
     const on = $(`[data-seg="${k}"]`); const pill = $('.seg-pill');
-    if (window.anime && MOTION) anime({ targets: pill, translateX: on.offsetLeft - 4, width: on.offsetWidth, duration: 380, easing: 'easeOutElastic(1, .8)' });
-    else { pill.style.transform = `translateX(${on.offsetLeft - 4}px)`; pill.style.width = on.offsetWidth + 'px'; }
-    if (MOTION) anime({ targets: $(`[data-pane="${k}"]`).children, opacity: [0, 1], translateY: [10, 0], delay: anime.stagger(45), duration: 420, easing: 'easeOutCubic' });
-    if (k === 'mail') $('#lf input').focus();
+    if (!on || !pill) return; // экран уже сменился
+    pill.style.width = on.offsetWidth + 'px';
+    if (window.anime && MOTION) anime({ targets: pill, translateX: on.offsetLeft - 4, duration: 380, easing: 'easeOutElastic(1, .8)' });
+    else pill.style.transform = `translateX(${on.offsetLeft - 4}px)`;
+    history.replaceState(null, '', '#/' + (k === 'register' ? 'register' : 'login'));
+  };
+  const setKind = (k) => {
+    kind = k;
+    $$('[data-kind]').forEach((b) => b.classList.toggle('on', b.dataset.kind === k));
+    $$('[data-only="company"]').forEach((x) => x.classList.toggle('hidden', k !== 'company'));
+    $('[name="company"]').required = k === 'company';
   };
   $$('[data-seg]').forEach((b) => b.onclick = () => seg(b.dataset.seg));
-  requestAnimationFrame(() => { const on = $('[data-seg="quick"]'); const pill = $('.seg-pill'); pill.style.width = on.offsetWidth + 'px'; });
+  $$('[data-kind]').forEach((b) => b.onclick = () => setKind(b.dataset.kind));
+  requestAnimationFrame(() => seg(tab));
+  if (r.q.kind === 'company') setKind('company');
+  bindEyes();
   animateLogin();
-  const login = async (email, password) => {
-    try { await api('/login', { method: 'POST', body: { email, password } }); S.user = (await api('/me')).user;
-      go(r.q.org && S.user.role === 'resp' ? '/form' : '/' + NAV[S.user.role][0][0]); route(); }
-    catch (e) { toast(e.message, true); }
-  };
-  $('#lf').onsubmit = (e) => { e.preventDefault(); const f = new FormData(e.target); login(f.get('email'), f.get('password')); };
-  $$('[data-demo]').forEach((b) => b.onclick = () => login(b.dataset.demo, 'demo123'));
-  // с лендинга: «войти как …» — только демо-учётки (их пароль и так опубликован на странице)
-  if (/^[a-z]+@atu\.kz$/.test(r.q.demo || '')) login(r.q.demo, 'demo123');
-}
-async function renderRegister(r) {
-  const orgs = await api('/orgs');
-  $('#app').innerHTML = `<div class="login-form" style="min-height:100vh"><div class="login-card"><div class="brand" style="color:var(--forest);padding:0 0 14px">${LOGO}<div><b>${esc(S.cfg.systemName)}</b></div></div><div class="card">
-    <h2>Регистрация ответственного лица</h2>
-    <form id="rf">
-      <div class="field"><label>Имя пользователя</label><input name="full_name" required placeholder="напр. iskander"></div>
-      <div class="field"><label>Служебный e-mail</label><input name="email" type="email" required></div>
-      <div class="field"><label>Пароль (мин. 6 символов)</label><input name="password" type="password" minlength="6" required></div>
-      <div class="field"><label>${esc(S.cfg.orgLabel)}</label><select name="org_id" required>${orgs.map((o) => `<option value="${o.id}" ${+r.q.org === o.id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></div>
-      <p class="small muted">Обрабатываются только служебные данные (имя пользователя, e-mail) — Закон РК «О персональных данных и их защите». Роль и привязку может изменить администратор.</p>
-      <button class="btn-lg">Зарегистрироваться</button>
-    </form>
-    <p class="small" style="text-align:center"><a href="#/login">Уже есть учётная запись</a></p></div></div></div>`;
-  $('#rf').onsubmit = async (e) => {
-    e.preventDefault();
-    try { await api('/register', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); S.user = (await api('/me')).user; go('/form'); route(); }
+  $('#lf').onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target);
+    try { await api('/login', { method: 'POST', body: { email: f.get('email'), password: f.get('password') } }); await afterAuth(r); }
     catch (err) { toast(err.message, true); }
   };
+  $('#rf').onsubmit = async (e) => {
+    e.preventDefault(); $('#rfBtn').disabled = true;
+    try { await api('/register', { method: 'POST', body: { ...Object.fromEntries(new FormData(e.target)), kind, lang: LANG } });
+      toast(kind === 'company' ? T('Компания создана. Пригласите сотрудников в разделе «Администрирование»') : T('Аккаунт создан. Запишите первое, что выбросили сегодня'));
+      await afterAuth(r); }
+    catch (err) { toast(err.message, true); } finally { $('#rfBtn') && ($('#rfBtn').disabled = false); }
+  };
+  $('#forgot').onclick = (e) => { e.preventDefault(); modal(`<h2>${T('Восстановление пароля')}</h2>
+    <p>${T('Сотрудник компании: попросите администратора компании задать новый пароль (Администрирование → Пользователи).')}</p>
+    <p>${T('Личный аккаунт, привязанный к Telegram: откройте бота и нажмите кнопку меню «Wasteless» — вход без пароля, затем задайте новый пароль в профиле.')}</p>
+    <button data-close>${T('Понятно')}</button>`); };
+  $('#demoBtn').onclick = () => { $('#demoRoles').classList.toggle('hidden'); if (MOTION) anime({ targets: '#demoRoles .role', opacity: [0, 1], translateY: [10, 0], delay: anime.stagger(50), duration: 400, easing: 'easeOutCubic' }); };
+  $$('[data-demo]').forEach((b) => b.onclick = async () => {
+    try { await api('/demo', { method: 'POST', body: { role: b.dataset.demo } }); await afterAuth(); } catch (err) { toast(err.message, true); }
+  });
+  // с лендинга: «Посмотреть демо» сразу ролью
+  if (['manager', 'resp', 'reviewer', 'admin'].includes(r.q.demo)) $(`[data-demo="${r.q.demo}"]`)?.click();
+}
+const renderRegister = (r) => renderLogin(r, 'register');
+
+// приглашение: #/join?code=...
+async function renderJoin(r) {
+  let inv;
+  try { inv = await api('/invite/' + encodeURIComponent(r.q.code || '')); }
+  catch (e) { $('#app').innerHTML = authShell(`<div class="card"><h2>${T('Приглашение не найдено')}</h2><p>${esc(e.message)}</p><a class="btn" href="#/login">${T('Ко входу')}</a></div>`); return; }
+  if (S.user) {
+    $('#app').innerHTML = authShell(`<div class="card"><h2>${T('Вы уже вошли')}</h2><p>${T('Чтобы принять приглашение в')} «${esc(inv.company)}», ${T('выйдите из текущего аккаунта.')}</p>
+      <button id="lo">${T('Выйти и продолжить')}</button></div>`);
+    $('#lo').onclick = async () => { await api('/logout', { method: 'POST' }).catch(() => {}); S.user = null; route(); };
+    return;
+  }
+  $('#app').innerHTML = authShell(`<div class="card login-panel">
+    <div class="eyebrow">${T('Приглашение')}</div>
+    <h2 style="margin:4px 0 6px">${esc(inv.company)}</h2>
+    <p class="muted">${T('Роль')}: <b>${esc(T(inv.role_ru))}</b>${inv.org ? ` · ${esc(inv.org)}` : ''}</p>
+    <form id="jf">
+      <div class="field"><label>${T('Ваше имя')}</label><input name="full_name" autocomplete="name" required></div>
+      <div class="field"><label>E-mail</label><input name="email" type="email" autocomplete="email" required></div>
+      ${pwField()}${consentNote()}
+      <button class="btn-lg">${T('Присоединиться')}</button>
+    </form>
+    <p class="small" style="text-align:center"><a href="#/login">${T('Уже есть аккаунт — войти')}</a></p></div>`);
+  bindEyes(); animateLogin();
+  $('#jf').onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('/join', { method: 'POST', body: { ...Object.fromEntries(new FormData(e.target)), code: r.q.code } }); toast(T('Добро пожаловать в команду!')); go('/'); await afterAuth(); }
+    catch (err) { toast(err.message, true); }
+  };
+}
+
+// мини-приложение Telegram: аккаунта ещё нет — создать личный в один тап или войти
+function renderTgWelcome(info) {
+  $('#app').innerHTML = authShell(`<div class="card login-panel">
+    <h2>${T('Привет')}${info.tgName ? ', ' + esc(info.tgName) : ''}! 👋</h2>
+    <p class="muted">${T('Этот Telegram ещё не связан с аккаунтом Wasteless.')}</p>
+    <button class="btn-lg" id="tgNew">🏠 ${T('Создать личный аккаунт')}</button>
+    <p class="small muted" style="margin:8px 0 16px">${T('Домашний учёт: пишите боту, что выбросили, — он посчитает тенге и CO₂.')}</p>
+    <button class="btn-lg btn-light" id="tgLogin">${T('У меня есть аккаунт — войти')}</button>
+    <p class="small muted" style="margin-top:8px">${T('После входа нажмите «Подключить Telegram» в профиле — дальше вход будет без пароля.')}</p></div>`);
+  $('#tgNew').onclick = async () => {
+    try { await api('/telegram/webapp-login', { method: 'POST', body: { initData: window.Telegram.WebApp.initData, createPersonal: true } }); await afterAuth(); }
+    catch (e) { toast(e.message, true); }
+  };
+  $('#tgLogin').onclick = () => { S.tgSkip = true; go('/login'); route(); };
+}
+
+// ---------- профиль ----------
+async function pageProfile(main) {
+  const tgOnly = /@telegram\.wasteless$/.test(S.user.email);
+  main.innerHTML = `<div class="page-head"><div><h1>${T('Профиль')}</h1><div class="muted small">${esc(S.user.tenant_kind === 'personal' ? T('Личный аккаунт') : S.user.tenant_name)} · ${esc(T(ROLE_RU[S.user.role]))}</div></div></div>
+    <div class="grid g2">
+      <div class="card"><h3>${T('Данные')}</h3><form id="pf">
+        <div class="field"><label>${T('Имя')}</label><input name="full_name" value="${esc(S.user.full_name)}" required></div>
+        <div class="field"><label>E-mail</label><input name="email" type="email" value="${tgOnly ? '' : esc(S.user.email)}" placeholder="${tgOnly ? T('добавьте e-mail, чтобы входить с компьютера') : ''}" required></div>
+        <button>${T('Сохранить')}</button></form></div>
+      <div class="card"><h3>${tgOnly ? T('Задать пароль') : T('Сменить пароль')}</h3><form id="pw">
+        ${tgOnly ? '' : `<div class="field"><label>${T('Текущий пароль')}</label><input name="current" type="password" autocomplete="current-password" required></div>`}
+        ${pwField('next', 'Новый пароль')}
+        <button>${T('Сохранить пароль')}</button><p class="small muted">${T('Другие сеансы будут завершены.')}</p></form></div>
+    </div>
+    <div class="card" id="tgCard"></div>`;
+  bindEyes(main);
+  telegramCard($('#tgCard'));
+  $('#pf').onsubmit = async (e) => { e.preventDefault(); try { await api('/me/profile', { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); S.user = (await api('/me')).user; toast(T('Сохранено')); route(); } catch (err) { toast(err.message, true); } };
+  $('#pw').onsubmit = async (e) => { e.preventDefault(); try { await api('/me/password', { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); e.target.reset(); toast(T('Пароль изменён')); } catch (err) { toast(err.message, true); } };
 }
 
 // ---------- ФОРМА ВВОДА (ответственное лицо) ----------
@@ -597,7 +692,7 @@ async function pageForm(main) {
     <div id="status"></div>
     <div class="card quick" id="quickCard">
       <h3 style="margin-bottom:6px">⚡ ${T('Быстрый ввод фразой')}</h3>
-      <div class="small muted" style="margin-bottom:8px">${T('Скажите или напишите, например: «отходы из зала 12 кило, масло 3 литра»')}</div>
+      <div class="small muted" style="margin-bottom:8px">${S.user.role === 'personal' ? T('Напишите или скажите, что выбросили, например: «хлеб 0,3 кг, суп пол-литра»') : T('Скажите или напишите, например: «отходы из зала 12 кило, масло 3 литра»')}</div>
       <div class="qty-row"><input id="phrase" placeholder="${T('что взвесили…')}" autocomplete="off" style="font-size:16px;font-weight:400;text-align:left">
         <button type="button" class="btn-light" id="mic" title="Голосовой ввод" style="min-width:52px">🎙</button>
         <label class="btn btn-light" id="snapBtn" title="${T('Распознать по фото: отходы или табло весов')}" style="min-width:52px;margin:0;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)">📷<input type="file" id="snap" accept="image/*" capture="environment" hidden></label>
@@ -621,7 +716,7 @@ async function pageForm(main) {
       <div class="field"><label>${T('Способ утилизации')}</label><select id="method">${activeMethods.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></div>
       <div class="field photo-btn"><label class="btn btn-light btn-sm" style="margin:0;color:var(--ink)">📷 ${T('Фото')}<input type="file" id="photo" accept="image/*" capture="environment" hidden></label><span id="photoPrev" class="small muted">${T('необязательно')}</span></div>
       <div style="display:flex;gap:8px"><button class="btn-lg" id="save" style="flex:1">${T('Сохранить запись')}</button>
-        <button class="btn-lg btn-sec" id="scale" type="button" style="width:auto" title="Получить вес с электронных весов">⚖ ${T('Весы')}</button></div>
+        <button class="btn-lg btn-sec ${S.user.role === 'personal' ? 'hidden' : ''}" id="scale" type="button" style="width:auto" title="Получить вес с электронных весов">⚖ ${T('Весы')}</button></div>
       <button class="btn-lg btn-light hidden" id="cancelEdit" style="margin-top:8px">${T('Отменить редактирование')}</button>
       <div class="saved-hint" id="hint"></div>
     </div>
@@ -693,6 +788,8 @@ async function pageForm(main) {
     if (['submitted', 'in_review'].includes(report.status)) s = `<div class="alert alert-blue">Отчёт ${report.status === 'submitted' ? 'отправлен' : 'на проверке'} — редактирование заблокировано до решения проверяющего.</div>` + s;
     if (report.status === 'accepted') s = `<div class="alert alert-green">Отчёт принят ${dt(report.decided_at)} и включён в единый реестр. Редактирование заблокировано.</div>` + s;
     if (ed && daysLeft >= 0 && daysLeft <= 3) s = `<div class="alert alert-amber">Напоминание: до сдачи отчёта осталось ${daysLeft} дн.</div>` + s;
+    if (S.user.role === 'personal') s = '';
+    if (S.user.demo) s = `<div class="alert alert-blue">${T('Демо: здесь видно, как работает ввод. Сохранять записи можно в своём аккаунте.')}</div>` + s;
     $('#status').innerHTML = s;
     $('#entryCard').style.opacity = ed ? 1 : .55; $('#save').disabled = !ed; $('#scale').disabled = !ed;
     $('#quickCard')?.classList.toggle('hidden', !ed);
@@ -731,7 +828,8 @@ async function pageForm(main) {
       st.methodId = e.method_id; $('#method').value = e.method_id; $('#save').textContent = 'Сохранить изменения'; $('#cancelEdit').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
-    $('#histCard').innerHTML = `<h3>История отчёта</h3>${historyHtml(report.history)}`;
+    if (S.user.role === 'personal') $('#histCard')?.remove();
+    else $('#histCard').innerHTML = `<h3>История отчёта</h3>${historyHtml(report.history)}`;
   }
   const renderAll = () => { renderTypes(); renderReport(); };
 
@@ -1085,9 +1183,10 @@ function goalBar(r) {
 function goalCard(g) {
   const ch = g.changePct;
   const head = ch == null ? T('Цель месяца') : ch <= -g.goal.reduce_pct ? `🎉 ${T('Цель месяца выполнена')}` : ch < 0 ? `${T('Отходов меньше на')} ${fmt(-ch)}% — ${T('до цели')} ${fmt(g.goal.reduce_pct + ch)}%` : `${T('Отходов больше на')} ${fmt(ch)}% ${T('к базе')}`;
-  return `<a class="card goal-card" href="#/rating" style="display:block;color:inherit;text-decoration:none">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="small muted">${T('Цель и рейтинг')} · ${esc(MONTHS[new Date().getMonth()])}</div><h3 style="margin:2px 0 0">${head}</h3></div>
-    <div class="rank-score">${g.place}<small>${T('место из')} ${g.of}</small></div></div>
+  const personal = S.user.role === 'personal';
+  return `<a class="card goal-card" href="${personal ? '#/dashboard' : '#/rating'}" style="display:block;color:inherit;text-decoration:none">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="small muted">${personal ? T('Моя цель') : T('Цель и рейтинг')} · ${esc(MONTHS[new Date().getMonth()])}</div><h3 style="margin:2px 0 0">${head}</h3></div>
+    ${personal ? '' : `<div class="rank-score">${g.place}<small>${T('место из')} ${g.of}</small></div>`}</div>
     ${goalBar(g)}${badgesHtml(g.badges)}${g.savedKg ? `<div class="small" style="margin-top:6px">🌱 ${T('Сэкономлено к базе')}: <b>${fmt(g.savedKg)} кг</b></div>` : ''}</a>`;
 }
 async function pageRating(main, r) {
@@ -1140,16 +1239,16 @@ async function pageMe(main) {
         <div class="hero-kpi"><div class="label">${T('7 полных дней')}</div><div class="value">${fmt(s.week.kg)} кг</div><div class="sub">${T('к прошлой неделе')}: ${arrow(s.week.changePct)}</div></div>
         <div class="hero-kpi"><div class="label">${T('Этот месяц')}</div><div class="value">${fmt(s.month.kg)} кг</div><div class="sub">${s.month.entries} ${T('записей')}</div></div>
         <div class="hero-kpi"><div class="label">${T('CO₂ за месяц')}</div><div class="value">${fmt(s.month.co2)} кг</div><div class="sub">${T('можно')} −${fmt(s.month.co2Potential)} кг</div></div>
-        <div class="hero-kpi"><div class="label">${T('Отчёт за месяц')}</div><div class="value" style="font-size:17px;margin-top:6px">${chip(rep.status, rep.status_ru)}</div><div class="sub">${T('срок — до 5 числа')}</div></div>
+        ${S.user.role === 'personal' ? `<div class="hero-kpi"><div class="label">${T('Выброшено на сумму')}</div><div class="value">≈ ${fmt(s.month.kzt, 0)} ₸</div><div class="sub">${T('за месяц, по ценам продуктов')}</div></div>` : `<div class="hero-kpi"><div class="label">${T('Отчёт за месяц')}</div><div class="value" style="font-size:17px;margin-top:6px">${chip(rep.status, rep.status_ru)}</div><div class="sub">${T('срок — до 5 числа')}</div></div>`}
       </div>
     </section>
     ${rep.status === 'returned' ? `<div class="alert alert-red"><b>Отчёт возвращён:</b> ${esc(rep.last_comment)} — <a href="#/form">исправить</a></div>` : ''}
     ${s.goal ? goalCard(s.goal) : ''}
     <div class="quick-actions">
-      <a class="qa" href="#/form">${icon('edit')}<b>${T('Внести')}</b><small>${T('форма, фраза, весы')}</small></a>
+      <a class="qa" href="#/form">${icon('edit')}<b>${T('Внести')}</b><small>${S.user.role === 'personal' ? T('фраза, фото, Telegram') : T('форма, фраза, весы')}</small></a>
       <a class="qa" href="/api/my-report.xlsx?p=month">${icon('file')}<b>${T('Отчёт за месяц')}</b><small>${T('Excel, можно переслать')}</small></a>
       <a class="qa" href="/api/my-report.xlsx?p=week">${icon('db')}<b>${T('Отчёт за неделю')}</b><small>Excel</small></a>
-      <a class="qa" href="#/report/${rep.id}">${icon('check')}<b>${T('Статус отчёта')}</b><small>${T('история и комментарии')}</small></a>
+      ${S.user.role === 'personal' ? `<a class="qa" href="#/eco">${icon('cup')}<b>${T('Своя кружка')}</b><small>${T('сколько сэкономите')}</small></a>` : `<a class="qa" href="#/report/${rep.id}">${icon('check')}<b>${T('Статус отчёта')}</b><small>${T('история и комментарии')}</small></a>`}
     </div>
     <div class="grid g2">
       <div class="card"><h3>${T('По дням — 7 полных дней')}</h3><div class="chart-box" style="height:220px"><canvas id="cw"></canvas></div></div>
@@ -1322,6 +1421,12 @@ async function pageControl(main, r) {
 }
 
 // ---------- АДМИНИСТРИРОВАНИЕ ----------
+// общие справочники платформы (способы утилизации, продукты) правит только её владелец — остальным только просмотр
+function lockShared(el, what) {
+  el.querySelectorAll('form, label.btn').forEach((x) => x.closest('.card') && x.tagName === 'FORM' ? x.closest('.card').remove() : x.remove());
+  el.querySelectorAll('input, select, button').forEach((x) => { x.disabled = true; });
+  el.insertAdjacentHTML('afterbegin', `<div class="alert alert-blue">${T('Это общий справочник платформы')} (${what}) — ${T('он одинаковый для всех компаний и меняется только владельцем Wasteless. Нужен новый продукт или способ — напишите нам.')}</div>`);
+}
 async function pageAdmin(main, r) {
   const tab = r.q.tab || 'settings';
   main.innerHTML = `<div class="page-head"><h1>${T('Администрирование')}</h1></div>
@@ -1352,22 +1457,56 @@ async function pageAdmin(main, r) {
     });
   }
   if (tab === 'users') {
-    const users = await api('/users');
-    el.innerHTML = `<div class="card"><h3>Новый пользователь</h3><form id="f" class="row">
-        <div class="field"><label>Имя пользователя</label><input name="full_name" required placeholder="напр. iskander"></div><div class="field"><label>E-mail</label><input name="email" type="email" required></div>
-        <div class="field"><label>Пароль</label><input name="password" required minlength="6"></div>
-        <div class="field"><label>Роль</label><select name="role">${Object.entries(ROLE_RU).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    const [users, invites] = await Promise.all([api('/users'), api('/invites')]);
+    const COMPANY_ROLES = Object.entries(ROLE_RU).filter(([k]) => k !== 'personal');
+    el.innerHTML = `<div class="card"><h3>✉️ ${T('Пригласить сотрудника')}</h3>
+        <p class="small muted">${T('Отправьте ссылку или покажите QR-код — сотрудник сам задаст имя и пароль. Ссылка действует 7 дней.')}</p>
+        <form id="inv" class="row">
+          <div class="field"><label>${T('Роль')}</label><select name="role">${COMPANY_ROLES.map(([k, v]) => `<option value="${k}">${T(v)}</option>`).join('')}</select></div>
+          <div class="field"><label>${esc(S.cfg.orgLabel)} (${T('для ответственного')})</label><select name="org_id">${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
+          <div class="field"><label>${T('Сколько человек')}</label><input name="max_uses" type="number" min="1" max="100" value="1" style="width:90px"></div>
+          <button>${T('Создать ссылку')}</button></form>
+        ${invites.length ? `<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>${T('Роль')}</th><th>${esc(S.cfg.orgLabel)}</th><th>${T('Использовано')}</th><th>${T('Действует до')}</th><th></th></tr></thead>
+          <tbody>${invites.map((i) => `<tr><td>${esc(T(i.role_ru))}</td><td>${esc(i.org_short || '—')}</td><td>${i.uses} / ${i.max_uses}</td><td>${dmy(i.expires_at)}</td>
+            <td><button class="btn-sm btn-light" data-icopy="${esc(i.url)}">${T('Копировать')}</button> <button class="btn-sm icon-btn" data-idel="${i.id}" title="${T('Отозвать')}">✕</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+      </div>
+      <div class="card"><h3>${T('Создать пользователя вручную')}</h3><form id="f" class="row">
+        <div class="field"><label>${T('Имя')}</label><input name="full_name" required></div><div class="field"><label>E-mail</label><input name="email" type="email" required></div>
+        <div class="field"><label>${T('Пароль')}</label><input name="password" required minlength="8" placeholder="${T('от 8 символов, буквы и цифры')}"></div>
+        <div class="field"><label>${T('Роль')}</label><select name="role">${COMPANY_ROLES.map(([k, v]) => `<option value="${k}">${T(v)}</option>`).join('')}</select></div>
         <div class="field"><label>${esc(S.cfg.orgLabel)} (для ответственного)</label><select name="org_id"><option value="">—</option>${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
         <button>Создать</button></form></div>
       <div class="card"><div class="table-wrap"><table><thead><tr><th>Имя пользователя</th><th>E-mail</th><th>Роль</th><th>${esc(S.cfg.orgLabel)}</th><th>Активен</th></tr></thead>
-      <tbody>${users.map((u) => `<tr><td>${esc(u.full_name)}</td><td>${esc(u.email)}</td>
-        <td><select data-role="${u.id}">${Object.entries(ROLE_RU).map(([k, v]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+      <tbody>${users.map((u) => `<tr><td>${esc(u.full_name)}${u.tg ? ' <span title="Telegram">✈</span>' : ''}</td><td>${esc(u.email)}<div><button class="btn-sm btn-light" data-reset="${u.id}" style="margin-top:4px">${T('Новый пароль')}</button></div></td>
+        <td><select data-role="${u.id}">${COMPANY_ROLES.map(([k, v]) => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${T(v)}</option>`).join('')}</select></td>
         <td><select data-org="${u.id}"><option value="">—</option>${orgs.map((o) => `<option value="${o.id}" ${u.org_id === o.id ? 'selected' : ''}>${esc(o.short)}</option>`).join('')}</select></td>
         <td><input type="checkbox" data-uact="${u.id}" ${u.active ? 'checked' : ''} style="width:auto"></td></tr>`).join('')}</tbody></table></div>
       <p class="small muted">Пароли хранятся только в виде хэша scrypt с солью.</p></div>`;
     $('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/users', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Пользователь создан'); route(); } catch (err) { toast(err.message, true); } };
     const save = async (id) => { try { await api('/users/' + id, { method: 'PUT', body: { role: $(`[data-role="${id}"]`).value, org_id: $(`[data-org="${id}"]`).value, active: $(`[data-uact="${id}"]`).checked } }); toast('Сохранено'); } catch (e) { toast(e.message, true); } };
     $$('[data-role],[data-org],[data-uact]').forEach((x) => x.onchange = () => save(x.dataset.role || x.dataset.org || x.dataset.uact));
+    const copy = async (t) => { try { await navigator.clipboard.writeText(t); toast(T('Ссылка скопирована')); } catch { prompt(T('Скопируйте ссылку'), t); } };
+    $('#inv').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        const r = await api('/invites', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) });
+        modal(`<div style="text-align:center"><h2>${T('Приглашение готово')}</h2><img src="${r.qr}" alt="" style="width:220px;max-width:100%">
+          <div class="invite-url">${esc(r.url)}</div>
+          <div class="row" style="justify-content:center;margin-top:12px"><button id="cp">${T('Копировать ссылку')}</button>
+          ${navigator.share ? `<button class="btn-light" id="sh">${T('Поделиться')}</button>` : ''}<button class="btn-light" data-close>${T('Готово')}</button></div></div>`, (m) => {
+          $('#cp', m).onclick = () => copy(r.url);
+          $('#sh', m)?.addEventListener('click', () => navigator.share({ title: 'Wasteless', text: T('Приглашение в Wasteless'), url: r.url }).catch(() => {}));
+        }, () => route());
+        setTimeout(() => {}, 0);
+      } catch (err) { toast(err.message, true); }
+    };
+    $$('[data-icopy]').forEach((b) => b.onclick = () => copy(b.dataset.icopy));
+    $$('[data-idel]').forEach((b) => b.onclick = async () => { if (!confirm(T('Отозвать приглашение?'))) return; await api('/invites/' + b.dataset.idel, { method: 'DELETE' }); route(); });
+    $$('[data-reset]').forEach((b) => b.onclick = async () => {
+      const pw = prompt(T('Новый пароль для сотрудника (от 8 символов, буквы и цифры). Его сеансы будут завершены.'));
+      if (!pw) return;
+      try { await api('/users/' + b.dataset.reset, { method: 'PUT', body: { password: pw } }); toast(T('Пароль изменён — передайте его сотруднику лично')); } catch (e) { toast(e.message, true); }
+    });
   }
   if (tab === 'types') {
     const types = await api('/waste-types?all=1');
@@ -1375,13 +1514,13 @@ async function pageAdmin(main, r) {
     const mOpts = (sel, empty) => (empty ? `<option value="">—</option>` : '') + methods.map((m) => `<option value="${m.id}" ${sel === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
     el.innerHTML = `<div class="card"><h3>Добавить вид отхода</h3><form id="f" class="row">
         <div class="field"><label>Наименование</label><input name="name" required></div>
-        <div class="field"><label>${esc(S.cfg.orgLabel)}</label><select name="org_id"><option value="">общий для всех</option>${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
+        <div class="field"><label>${esc(S.cfg.orgLabel)}</label><select name="org_id" required>${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
         <div class="field"><label>Категория</label><select name="category">${Object.entries(CAT).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}</select></div>
         <div class="field"><label>Ед.</label><select name="unit"><option>кг</option><option>л</option></select></div>
         <div class="field"><label>Пригоден к переработке</label><select name="recyclable"><option value="2">да</option><option value="1">частично</option><option value="0">нет</option></select></div>
         <div class="field"><label>Рекомендуемый способ</label><select name="recommended_method_id">${mOpts(null, true)}</select></div><button>Добавить</button></form></div>
       <div class="card"><div class="table-wrap" style="max-height:620px"><table><thead><tr><th>Наименование</th><th>${esc(S.cfg.orgLabel)}</th><th>Ед.</th><th>Сейчас (по умолч.)</th><th>Рекомендуемый</th><th class="num">CO₂ ТБО, кг/т</th><th>Переработка</th><th class="num">Предел</th><th>Акт.</th><th class="num">Записей</th></tr></thead>
-      <tbody>${types.map((t) => `<tr data-w="${t.id}"><td>${catIcon(t.category)} ${esc(t.name)}${t.note ? `<div class="small muted">${esc(t.note)}</div>` : ''}</td><td class="small">${esc(t.org_short || 'общий')}</td><td>${t.unit}</td>
+      <tbody>${types.map((t) => `<tr data-w="${t.id}"><td>${catIcon(t.category)} ${esc(t.name)}${t.note ? `<div class="small muted">${esc(t.note)}</div>` : ''}</td><td class="small">${esc(t.org_short || '')}</td><td>${t.unit}</td>
         <td><select data-f="default_method_id">${mOpts(t.default_method_id)}</select></td><td><select data-f="recommended_method_id">${mOpts(t.recommended_method_id, true)}</select></td>
         <td><input data-f="co2_factor" data-k="1000" value="${Math.round(t.co2_factor * 100000) / 100}" style="width:90px"></td>
         <td><select data-f="recyclable">${REC.map((v, i) => `<option value="${i}" ${t.recyclable === i ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
@@ -1399,7 +1538,8 @@ async function pageAdmin(main, r) {
     el.innerHTML = `<div class="grid g2">
       <div class="card"><h3>Система</h3><form id="cf">
         <div class="field"><label>Название системы</label><input name="systemName" value="${esc(cfg.systemName)}"></div>
-        <div class="field"><label>Организация-владелец</label><input name="company" value="${esc(cfg.company)}"></div>
+        <div class="field"><label>${T('Название компании')}</label><input name="company" value="${esc(cfg.company)}"></div>
+        <div class="field"><label>${T('Скидка за свою кружку, ₸')}</label><input name="cupDiscountKzt" inputmode="numeric" value="${esc(cfg.cupDiscountKzt)}"></div>
         <div class="row"><div class="field"><label>Как называть подразделение</label><input name="orgLabel" value="${esc(cfg.orgLabel)}"></div>
           <div class="field"><label>Во множественном числе</label><input name="orgsLabel" value="${esc(cfg.orgsLabel)}"></div></div>
         <button style="margin-top:12px">Сохранить</button></form></div>
@@ -1412,7 +1552,7 @@ async function pageAdmin(main, r) {
     <div class="card"><h3>Отраслевой шаблон</h3>
       <p class="small muted">Система не привязана к университету: выберите отрасль — поменяются термины, а шаблон добавит типовые виды отходов с рекомендуемыми способами и коэффициентами CO₂.</p>
       <div class="ind-grid">${cfg.industries.map((i) => `<button type="button" class="ind ${i.key === cfg.industry ? 'on' : ''}" data-ind="${i.key}"><b>${esc(i.label)}</b><span>${esc(i.example)} · «${esc(i.orgLabel)}»</span></button>`).join('')}</div>
-      <div class="row" style="margin-top:12px"><div class="field"><label>Добавить виды отходов шаблона в</label><select id="indOrg"><option value="">общий справочник (для всех)</option>${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
+      <div class="row" style="margin-top:12px"><div class="field"><label>Добавить виды отходов шаблона в</label><select id="indOrg"><option value="">${T('во все подразделения')}</option>${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
         <button id="indApply" class="btn-lime">Применить шаблон</button></div></div>`;
     let ind = cfg.industry;
     $('#cf').onsubmit = async (e) => { e.preventDefault(); try { S.cfg = await api('/config', { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); toast('Сохранено'); route(); } catch (err) { toast(err.message, true); } };
@@ -1470,6 +1610,7 @@ async function pageAdmin(main, r) {
       catch (err) { $('#pRes').innerHTML = `<div class="alert alert-red" style="margin:0">${esc(err.message)}</div>`; }
     };
   }
+  if (tab === 'products' && !(await api('/products?all=1')).canEdit) lockShared(el, T('продукты'));
   if (tab === 'scales') {
     const devs = await api('/scale/devices');
     el.innerHTML = `<div class="card"><h3>Электронные весы — подключение по API</h3>
@@ -1496,6 +1637,7 @@ async function pageAdmin(main, r) {
       const body = { code: b.code, name: b.name, rank: b.rank, is_recycling: !b.landfill, co2_factor: b.co2 ? Number(b.co2.replace(',', '.')) / 1000 : '' };
       try { await api('/methods', { method: 'POST', body }); toast('Добавлено'); route(); } catch (err) { toast(err.message, true); } };
     $$('[data-m]').forEach((c) => c.onchange = async () => { await api('/methods/' + c.dataset.m, { method: 'PUT', body: { active: c.checked } }); toast('Сохранено'); });
+    if (!S.user.platform) lockShared(el, T('способы утилизации и коэффициенты CO₂'));
   }
 }
 

@@ -47,39 +47,40 @@ function orgsForText(text, orgs) {
   const t = text.toLowerCase();
   return orgs.filter((o) => (o.match_key || o.short).toLowerCase().split('|').some((k) => k && t.includes(k)));
 }
-function applyReference({ methods, types }, { orgId = null, matchOrgs = true } = {}) {
-  const stats = { methodsAdded: 0, methodsUpdated: 0, typesAdded: 0, typesUpdated: 0 };
-  db.exec('BEGIN');
-  try {
-    for (const m of methods) {
-      const ex = db.prepare('SELECT id FROM disposal_methods WHERE code=? OR name=?').get(m.code, m.name);
+// Применить справочник к компании (tenantId): виды отходов — в её подразделения.
+// Способы утилизации общие для всей платформы — их меняет только владелец платформы (withMethods).
+async function applyReference({ methods, types }, { tenantId, orgId = null, matchOrgs = true, withMethods = false, defaultMethod = 'TBO' } = {}) {
+  const stats = { methodsAdded: 0, methodsUpdated: 0, typesAdded: 0, typesUpdated: 0, methodsSkipped: withMethods ? 0 : methods.length };
+  return db.tx(async () => {
+    if (withMethods) for (const m of methods) {
+      const ex = await db.prepare('SELECT id FROM disposal_methods WHERE code=? OR name=?').get(m.code, m.name);
       const co2 = m.landfill || m.co2PerT == null ? null : m.co2PerT / 1000;
-      if (ex) { db.prepare('UPDATE disposal_methods SET code=?, name=?, is_recycling=?, co2_factor=?, rank=?, note=? WHERE id=?').run(m.code, m.name, m.landfill ? 0 : 1, co2, m.rank, m.note, ex.id); stats.methodsUpdated++; }
-      else { db.prepare('INSERT INTO disposal_methods (code, name, is_recycling, co2_factor, rank, note) VALUES (?,?,?,?,?,?)').run(m.code, m.name, m.landfill ? 0 : 1, co2, m.rank, m.note); stats.methodsAdded++; }
+      if (ex) { await db.prepare('UPDATE disposal_methods SET code=?, name=?, is_recycling=?, co2_factor=?, rank=?, note=? WHERE id=?').run(m.code, m.name, m.landfill ? 0 : 1, co2, m.rank, m.note, ex.id); stats.methodsUpdated++; }
+      else { await db.prepare('INSERT INTO disposal_methods (code, name, is_recycling, co2_factor, rank, note) VALUES (?,?,?,?,?,?)').run(m.code, m.name, m.landfill ? 0 : 1, co2, m.rank, m.note); stats.methodsAdded++; }
     }
-    const byCode = (c) => c && db.prepare('SELECT id FROM disposal_methods WHERE code=?').get(c)?.id;
-    const tbo = byCode('TBO') || db.prepare('SELECT id FROM disposal_methods ORDER BY rank DESC, id LIMIT 1').get()?.id;
-    const allOrgs = db.prepare('SELECT * FROM organizations WHERE active=1').all();
+    const codes = Object.fromEntries((await db.prepare('SELECT id, code FROM disposal_methods').all()).map((r) => [r.code, r.id]));
+    const byCode = (c) => (c && codes[c]) || null;
+    const tbo = byCode(defaultMethod) || byCode('TBO') || (await db.prepare('SELECT id FROM disposal_methods ORDER BY rank DESC, id LIMIT 1').get())?.id;
+    const allOrgs = await db.prepare('SELECT * FROM organizations WHERE active=1 AND tenant_id=?').all(+tenantId);
     for (const t of types) {
-      const targets = orgId ? [orgId] : matchOrgs ? orgsForText(t.orgs, allOrgs).map((o) => o.id) : [];
+      const targets = orgId ? [orgId] : matchOrgs ? orgsForText(t.orgs, allOrgs).map((o) => o.id) : allOrgs.map((o) => o.id);
       const rec = byCode(t.recCode) || null;
-      for (const oid of targets.length ? targets : [null]) {
-        const ex = db.prepare('SELECT id FROM waste_types WHERE lower(name)=lower(?) AND org_id IS ?').get(t.name, oid);
+      for (const oid of targets) {
+        const ex = await db.prepare('SELECT id FROM waste_types WHERE lower(name)=lower(?) AND org_id=?').get(t.name, oid);
         const vals = [t.unit, t.unit === 'л' ? 0.92 : 1, t.category, rec, t.recyclable, t.landfillCo2PerT / 1000, t.note || null];
         if (ex) {
-          db.prepare('UPDATE waste_types SET unit=?, kg_per_unit=?, category=?, recommended_method_id=?, recyclable=?, co2_factor=?, note=? WHERE id=?').run(...vals, ex.id);
+          await db.prepare('UPDATE waste_types SET unit=?, kg_per_unit=?, category=?, recommended_method_id=?, recyclable=?, co2_factor=?, note=? WHERE id=?').run(...vals, ex.id);
           stats.typesUpdated++;
         } else {
           const def = t.unit === 'л' && byCode('OIL') ? byCode('OIL') : tbo; // способ «как сейчас» — ТБО (по образцам), масло — спецорганизация
-          db.prepare(`INSERT INTO waste_types (org_id, name, unit, kg_per_unit, category, recommended_method_id, recyclable, co2_factor, note, default_method_id, max_per_entry)
+          await db.prepare(`INSERT INTO waste_types (org_id, name, unit, kg_per_unit, category, recommended_method_id, recyclable, co2_factor, note, default_method_id, max_per_entry)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(oid, t.name, ...vals, def, t.category === 'organic' ? 200 : 60);
           stats.typesAdded++;
         }
       }
     }
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
-  return stats;
+    return stats;
+  });
 }
 
 // ---------- отраслевые шаблоны ----------
@@ -108,6 +109,16 @@ const INDUSTRIES = {
     t('Картонная тара', 'recyclable', 'кг', 2, 'Сдача на переработку', C),
     t('Стеклобутылка', 'recyclable', 'кг', 2, 'Сдача на переработку', G),
   ] },
+  // личный учёт: домашняя кухня
+  home: { label: 'Дом / личный учёт', orgLabel: 'Кухня', orgsLabel: 'Кухни', example: 'домашняя кухня', personal: true, types: [
+    t('Остатки еды с тарелок', 'organic', 'кг', 2, 'Компостирование', L, 'Готовить меньше порций, хранить остатки в контейнерах'),
+    t('Испорченные продукты', 'organic', 'кг', 2, 'Компостирование', L, 'Сигнал покупать меньше и проверять сроки'),
+    t('Очистки овощей и фруктов', 'organic', 'кг', 2, 'Компостирование', L),
+    t('Хлеб', 'organic', 'кг', 2, 'Корм животным, иначе компост', L, 'Сухари, гренки, заморозка'),
+    t('Кофейная гуща и чай', 'organic', 'кг', 2, 'Компостирование', L),
+    t('Картон и бумажная упаковка', 'recyclable', 'кг', 2, 'Сдача на переработку', C),
+    t('Пластик и ПЭТ', 'recyclable', 'кг', 1, 'Сдача на переработку', G, 'Допущение: коэффициенты как у стекла'),
+  ] },
   retail: { label: 'Розничная торговля', orgLabel: 'Магазин', orgsLabel: 'Магазины', example: 'магазины сети, распределительный центр', types: [
     t('Просроченная продукция', 'organic', 'кг', 1, 'Биогаз (анаэробное сбраживание)', L, 'Анализ по товарным группам'),
     t('Продукция с истекающим сроком (уценка/передача)', 'organic', 'кг', 2, 'Передача (фудшеринг), иначе компост', L, 'Лучше предотвратить: уценка, передача'),
@@ -118,27 +129,32 @@ const INDUSTRIES = {
   ] },
 };
 
-function getSettings() {
-  const s = Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value]));
-  const ind = INDUSTRIES[s.industry] ? s.industry : 'university';
+// настройки компании (у каждой — свои): название, термины, отрасль, скидка за свою кружку
+async function getSettings(tenantId) {
+  const tn = tenantId ? await db.prepare('SELECT * FROM tenants WHERE id=?').get(+tenantId) : null;
+  const s = tn ? Object.fromEntries((await db.prepare('SELECT key, value FROM settings WHERE tenant_id=?').all(tn.id)).map((r) => [r.key, r.value])) : {};
+  const ind = INDUSTRIES[s.industry] ? s.industry : INDUSTRIES[tn?.industry] ? tn.industry : 'university';
   return {
+    tenantKind: tn?.kind || null,
     industry: ind, industryLabel: INDUSTRIES[ind].label,
     systemName: s.systemName || 'Wasteless',
-    company: s.company || 'АО «Алматинский технологический университет»',
+    company: s.company || tn?.name || '',
     orgLabel: s.orgLabel || INDUSTRIES[ind].orgLabel, orgsLabel: s.orgsLabel || INDUSTRIES[ind].orgsLabel,
     cupDiscountKzt: Number(s.cupDiscountKzt ?? 100), // скидка в кофейне за свою кружку, ₸
-    industries: Object.entries(INDUSTRIES).map(([k, v]) => ({ key: k, label: v.label, example: v.example, orgLabel: v.orgLabel })),
+    industries: Object.entries(INDUSTRIES).filter(([, v]) => !v.personal).map(([k, v]) => ({ key: k, label: v.label, example: v.example, orgLabel: v.orgLabel })),
   };
 }
-function setSettings(b) {
-  const up = db.prepare('INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
-  for (const k of ['systemName', 'company', 'orgLabel', 'orgsLabel', 'industry', 'cupDiscountKzt']) if (b[k] != null) up.run(k, String(b[k]).slice(0, 120));
-  if (b.industry && INDUSTRIES[b.industry] && b.resetLabels) { up.run('orgLabel', INDUSTRIES[b.industry].orgLabel); up.run('orgsLabel', INDUSTRIES[b.industry].orgsLabel); }
+async function setSettings(tenantId, b) {
+  const up = db.prepare('INSERT INTO settings (tenant_id, key, value) VALUES (?,?,?) ON CONFLICT(tenant_id, key) DO UPDATE SET value=excluded.value');
+  for (const k of ['systemName', 'company', 'orgLabel', 'orgsLabel', 'industry', 'cupDiscountKzt']) if (b[k] != null) await up.run(+tenantId, k, String(b[k]).slice(0, 120));
+  if (b.industry && INDUSTRIES[b.industry] && b.resetLabels) { await up.run(+tenantId, 'orgLabel', INDUSTRIES[b.industry].orgLabel); await up.run(+tenantId, 'orgsLabel', INDUSTRIES[b.industry].orgsLabel); }
+  if (b.company) await db.prepare('UPDATE tenants SET name=? WHERE id=?').run(String(b.company).slice(0, 120), +tenantId);
 }
-function applyIndustry(key, orgId) {
-  const ind = INDUSTRIES[key];
-  if (!ind?.types) throw new Error('Для этой отрасли используйте импорт справочника из Excel');
-  return applyReference({ methods: [], types: ind.types }, { orgId: orgId || null, matchOrgs: false });
+// отраслевой шаблон видов отходов; у университета своего шаблона нет (справочник из Excel) — берём общепит
+async function applyIndustry(tenantId, key, orgId) {
+  const ind = INDUSTRIES[key]?.types ? INDUSTRIES[key] : key === 'university' ? INDUSTRIES.horeca : null;
+  if (!ind) throw new Error('Для этой отрасли используйте импорт справочника из Excel');
+  return applyReference({ methods: [], types: ind.types }, { tenantId, orgId: orgId || null, matchOrgs: false, defaultMethod: ind.personal ? 'TBO_BIN' : 'TBO' });
 }
 
 module.exports = { parseWorkbook, applyReference, applyIndustry, getSettings, setSettings, INDUSTRIES };

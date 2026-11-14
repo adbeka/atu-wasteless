@@ -4,13 +4,7 @@
 const { db, nowIso } = require('./db');
 const A = require('./analytics');
 
-db.exec(`CREATE TABLE IF NOT EXISTS org_goals (
-  org_id INTEGER PRIMARY KEY REFERENCES organizations(id),
-  reduce_pct REAL NOT NULL DEFAULT 10,      -- цель: на сколько % снизить кг/день к базе
-  diverted_pct REAL NOT NULL DEFAULT 30,    -- цель: доля отходов мимо полигона, %
-  updated_by INTEGER REFERENCES users(id),
-  updated_at TEXT
-)`);
+// таблица org_goals — в db.js: reduce_pct (снизить кг/день к базе, %), diverted_pct (доля мимо полигона, %)
 const DEFAULT = { reduce_pct: 10, diverted_pct: 30 };
 
 const ym = (d) => d.slice(0, 7);
@@ -21,12 +15,12 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const r1 = (x) => Math.round(x * 10) / 10;
 const LOW_FREQ = /кафедр|лаборатор/i; // подразделения, которые взвешивают не каждый день
 
-function goalOf(orgId) { return { ...DEFAULT, ...(db.prepare('SELECT reduce_pct, diverted_pct FROM org_goals WHERE org_id=?').get(orgId) || {}) }; }
-function setGoal(orgId, b, userId) {
-  const g = { ...goalOf(orgId) };
+async function goalOf(orgId) { return { ...DEFAULT, ...((await db.prepare('SELECT reduce_pct, diverted_pct FROM org_goals WHERE org_id=?').get(orgId)) || {}) }; }
+async function setGoal(orgId, b, userId) {
+  const g = { ...(await goalOf(orgId)) };
   if (b.reduce_pct != null) g.reduce_pct = clamp(Number(b.reduce_pct) || 0, 0, 90);
   if (b.diverted_pct != null) g.diverted_pct = clamp(Number(b.diverted_pct) || 0, 0, 100);
-  db.prepare(`INSERT INTO org_goals (org_id, reduce_pct, diverted_pct, updated_by, updated_at) VALUES (?,?,?,?,?)
+  await db.prepare(`INSERT INTO org_goals (org_id, reduce_pct, diverted_pct, updated_by, updated_at) VALUES (?,?,?,?,?)
     ON CONFLICT(org_id) DO UPDATE SET reduce_pct=excluded.reduce_pct, diverted_pct=excluded.diverted_pct, updated_by=excluded.updated_by, updated_at=excluded.updated_at`)
     .run(orgId, g.reduce_pct, g.diverted_pct, userId || null, nowIso());
   return g;
@@ -38,24 +32,25 @@ function perDay(rows) {
   return { kg, days, perDay: days ? kg / days : 0 };
 }
 
-function rating(period = ym(A.today())) {
+async function rating(tenantId, period = ym(A.today())) {
   const t = A.today();
   const from = monthStart(period), to = period === ym(t) ? t : monthEnd(period);
   const elapsed = Math.round((new Date(to) - new Date(from)) / 864e5) + 1;
   const bFrom = monthStart(shiftMonth(period, -3)), bTo = monthEnd(shiftMonth(period, -1));
   const prevP = shiftMonth(period, -1);
   const deadline = `${period}-05`; // отчёт за прошлый месяц — до 5 числа
-  const orgs = db.prepare('SELECT * FROM organizations WHERE active=1 ORDER BY id').all();
-  const rows = orgs.map((o) => {
-    const cur = perDay(A.registryRows({ from, to, orgId: o.id, statuses: A.ALL_ST }));
-    const base = perDay(A.registryRows({ from: bFrom, to: bTo, orgId: o.id, statuses: A.ALL_ST }));
-    const curRows = A.registryRows({ from, to, orgId: o.id, statuses: A.ALL_ST });
-    const g = goalOf(o.id);
+  const orgs = await db.prepare('SELECT * FROM organizations WHERE active=1 AND tenant_id=? ORDER BY id').all(+tenantId);
+  const rows = [];
+  for (const o of orgs) {
+    const curRows = await A.registryRows({ from, to, orgId: o.id, statuses: A.ALL_ST });
+    const cur = perDay(curRows);
+    const base = perDay(await A.registryRows({ from: bFrom, to: bTo, orgId: o.id, statuses: A.ALL_ST }));
+    const g = await goalOf(o.id);
     const changePct = base.perDay && cur.days ? r1((cur.perDay - base.perDay) / base.perDay * 100) : null;
     const diverted = cur.kg ? r1(curRows.filter((r) => r.is_recycling).reduce((a, r) => a + r.kg, 0) / cur.kg * 100) : 0;
     const expectedDays = Math.max(1, Math.round(elapsed * (LOW_FREQ.test(o.type) ? 0.15 : 0.7)));
     const regularity = clamp(cur.days / expectedDays, 0, 1);
-    const prevRep = db.prepare('SELECT status, submitted_at FROM reports WHERE org_id=? AND period=?').get(o.id, prevP);
+    const prevRep = await db.prepare('SELECT status, submitted_at FROM reports WHERE org_id=? AND period=?').get(o.id, prevP);
     const onTime = !!(prevRep && ['submitted', 'in_review', 'accepted'].includes(prevRep.status) && prevRep.submitted_at && prevRep.submitted_at.slice(0, 10) <= deadline);
     // баллы: снижение к базе 40 · мимо полигона 30 · регулярность 20 · отчёт вовремя 10
     const sRed = changePct == null ? 0.5 : clamp(0.5 - (changePct / (g.reduce_pct || 10)) * 0.5, 0, 1);
@@ -70,15 +65,16 @@ function rating(period = ym(A.today())) {
     if (onTime) badges.push({ k: 'ontime', level: 'good', text: 'Отчёт сдан вовремя' });
     if (changePct != null && changePct > 10) badges.push({ k: 'growth', level: 'warn', text: `Рост на ${changePct}%` });
     if (!cur.days) badges.push({ k: 'nodata', level: 'warn', text: 'Нет записей за месяц' });
-    return {
+    rows.push({
       org_id: o.id, org: o.name, short: o.short, type: o.type, goal: g, score,
       kgPerDay: r1(cur.perDay), basePerDay: r1(base.perDay), targetPerDay: target == null ? null : r1(target),
       changePct, diverted, activeDays: cur.days, expectedDays, regularity: Math.round(regularity * 100), onTime, kg: r1(cur.kg), savedKg,
       // прогресс к цели: 0% — на уровне базы, 100% — цель достигнута
       progress: changePct == null ? null : Math.round(clamp(-changePct / (g.reduce_pct || 10), -1, 1.5) * 100),
       badges,
-    };
-  }).sort((a, b) => b.score - a.score);
+    });
+  }
+  rows.sort((a, b) => b.score - a.score);
   rows.forEach((r, i) => { r.place = i + 1; });
   return { period, label: A.monthFull(period), from, to, baseline: { from: bFrom, to: bTo }, rows };
 }

@@ -1,4 +1,4 @@
-// Выгрузка сводного отчёта в Excel по структуре действующих таблиц учёта АО «АТУ»
+// Выгрузка сводного отчёта в Excel по структуре таблиц учёта (образец — журналы АО «АТУ»); название компании — из её настроек
 const ExcelJS = require('exceljs');
 const { db } = require('./db');
 // число остаётся числом (можно суммировать в Excel), единица показывается форматом ячейки
@@ -21,15 +21,17 @@ function title(ws, text, sub, cols) {
 }
 
 async function buildSummaryXlsx(s) {
+  const company = s.company || 'организации';
+  const methods = await db.prepare('SELECT code, name, co2_factor, rank FROM disposal_methods WHERE active=1 ORDER BY rank, id').all();
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'АТУ · Цифровая система учёта пищевых отходов';
+  wb.creator = 'Wasteless · учёт пищевых отходов';
   wb.created = new Date();
 
   // 1. Сводный отчёт: организации × виды отходов × месяцы
   const ws = wb.addWorksheet('Сводный отчёт', { views: [{ state: 'frozen', ySplit: 4 }] });
   const mcols = s.months.length;
   const cols = 3 + mcols + 5;
-  title(ws, `Сводный отчёт по пищевым отходам университетского комплекса АО «АТУ» — ${s.label}`,
+  title(ws, `Сводный отчёт по пищевым отходам — ${company} — ${s.label}`,
     `Период ${s.from} — ${s.to}. Источник: единый реестр (только принятые отчёты). Сформировано ${new Date().toLocaleString('ru-RU')}`, cols);
   header(ws, 4, ['Организация', 'Наименование отходов', 'Ед.', ...s.months, 'Итого за период', 'Масса, кг', 'Способ переработки / утилизации', 'Пригоден к переработке', 'CO₂-экв., кг']);
   let row = 5;
@@ -91,16 +93,16 @@ async function buildSummaryXlsx(s) {
     ['Доля фактически переработанных, %', s.recycledShare, 'по способу утилизации'],
     ['Источник коэффициентов', 'DEFRA / BEIS 2024', 'Greenhouse gas reporting: conversion factors 2024, раздел Waste disposal (справочник организаторов Трека 1)'],
     ['Формула экономии', 'масса (т) × (коэф. ТБО − коэф. нового способа)', 'масло: литры × 0,92 = кг'],
-    ...db.prepare('SELECT code, name, co2_factor, rank FROM disposal_methods WHERE active=1 ORDER BY rank, id').all()
+    ...methods
       .map((m) => [`Способ ${m.code || ''}: ${m.name}`, m.co2_factor == null ? (/TBO/.test(m.code || '') ? 'по виду отхода' : 'нет коэффициента') : `${(m.co2_factor * 1000).toLocaleString('ru-RU')} кг CO₂e/т`, `иерархия: ${m.rank} (1 — лучше)`]),
   ].forEach((v, i) => { const r = we.getRow(5 + i); r.values = v; r.eachCell((c) => { c.border = border; }); });
   we.columns = [{ width: 44 }, { width: 22 }, { width: 80 }];
 
-  // 4. Журналы организаций — в формате «Таблица учёта пищевых отходов в университетском комплексе АО «АТУ»»
+  // 4. Журналы подразделений — в формате таблицы учёта пищевых отходов
   for (const o of s.orgs) {
     const name = o.short.replace(/[\\/?*[\]:«»"]/g, '').slice(0, 31);
     const wo = wb.addWorksheet(name);
-    title(wo, 'Таблица учёта пищевых отходов в университетском комплексе АО «АТУ»', `${o.name} · ${s.label}`, 6);
+    title(wo, `Таблица учёта пищевых отходов — ${company}`, `${o.name} · ${s.label}`, 6);
     header(wo, 4, ['№', 'Дата', 'Наименование отходов', 'Вес (кг) / Объём (л)', 'Способ переработки / утилизации', 'Ответственное лицо']);
     const rows = s.rows.filter((r) => r.org_id === o.id).sort((a, b) => a.date.localeCompare(b.date) || a.type_id - b.type_id);
     rows.forEach((r, i) => { const x = wo.getRow(5 + i); x.values = [i + 1, r.date.split('-').reverse().join('.'), r.type_name, r.qty, r.method_name, r.user_name]; x.getCell(4).numFmt = unitFmt(r.unit); x.eachCell((c) => { c.border = border; }); });

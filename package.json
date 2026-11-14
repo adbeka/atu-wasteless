@@ -1,7 +1,7 @@
 {
-  "name": "atu-food-waste",
+  "name": "wasteless",
   "version": "1.0.0",
-  "description": "Цифровая система управления пищевыми отходами университетского комплекса АО «АТУ»",
+  "description": "Wasteless — учёт пищевых отходов для компаний и дома: компании, роли, приглашения, личный учёт, Telegram-бот, PostgreSQL",
   "main": "server.js",
   "scripts": {
     "start": "node --no-warnings server.js",
@@ -17,6 +17,7 @@
     "chart.js": "^4.6.1",
     "exceljs": "^4.4.0",
     "express": "^4.22.3",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4"
   },
   "engines": {

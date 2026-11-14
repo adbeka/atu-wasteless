@@ -12,7 +12,6 @@ const enabled = () => !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_
 let client = null;
 const getClient = () => (client ??= new Anthropic({ maxRetries: 1, timeout: TIMEOUT_MS }));
 
-db.exec('CREATE TABLE IF NOT EXISTS ai_cache (key TEXT PRIMARY KEY, kind TEXT, text TEXT NOT NULL, created_at TEXT NOT NULL)');
 
 async function ask(system, user, effort = 'low') {
   const response = await getClient().beta.messages.create({
@@ -29,7 +28,7 @@ async function ask(system, user, effort = 'low') {
 }
 
 // ---------- 1. ИИ-заключение к отчёту ----------
-const CONCLUSION_SYSTEM = `Ты — аналитик по учёту пищевых отходов университета (АО «Алматинский технологический университет», Казахстан).
+const CONCLUSION_SYSTEM = `Ты — аналитик по учёту пищевых отходов организации (Казахстан): университет, общепит, производство, ритейл или домашняя кухня.
 Тебе дают JSON с фактами, которые уже посчитала система учёта. Напиши заключение для руководства на русском языке:
 — 1 абзац «Итог» (3–4 предложения): главное о динамике, структуре и экологии;
 — «Что сделать в следующем периоде»: 3 конкретных действия с ответственной организацией, по приоритету.
@@ -49,13 +48,13 @@ function rulesConclusion(facts) {
 
 async function conclusion(facts) {
   const key = crypto.createHash('sha256').update(MODEL + JSON.stringify(facts)).digest('hex');
-  const cached = db.prepare('SELECT text FROM ai_cache WHERE key=?').get(key);
+  const cached = await db.prepare('SELECT text FROM ai_cache WHERE key=?').get(key);
   if (cached) return { text: cached.text, source: 'ai', cached: true };
   if (!enabled()) return { text: rulesConclusion(facts), source: 'rules', reason: 'ИИ не подключён (нет ключа API)' };
   try {
     const text = await ask(CONCLUSION_SYSTEM, JSON.stringify(facts));
     if (!text) throw new Error('empty');
-    db.prepare('INSERT OR REPLACE INTO ai_cache (key, kind, text, created_at) VALUES (?,?,?,?)').run(key, 'conclusion', text, nowIso());
+    await db.prepare('INSERT INTO ai_cache (key, kind, text, created_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET text=excluded.text, created_at=excluded.created_at').run(key, 'conclusion', text, nowIso());
     return { text, source: 'ai' };
   } catch (e) {
     return { text: rulesConclusion(facts), source: 'rules', reason: `ИИ недоступен (${e.status || e.message}) — показан вывод по правилам` };
@@ -88,7 +87,7 @@ const stem = (w) => w.toLowerCase().replace(/ё/g, 'е').slice(0, Math.max(4, Ma
 const words = (s) => s.toLowerCase().replace(/ё/g, 'е').match(/[a-zа-яәіңғүұқөһ]{3,}/gi) || [];
 const STOP = new Set(['отходы', 'отход', 'отходов', 'было', 'сегодня', 'еще', 'ещё', 'итого', 'примерно', 'около']);
 
-function rulesParse(text, types, products = PROD.list()) {
+function rulesParse(text, types, products = []) {
   const out = [];
   // делим на фрагменты по запятым, «и», точкам с запятой
   const parts = String(text).split(/[;\n]|,(?!\d)| и | плюс /i).map((s) => s.trim()).filter(Boolean);
@@ -133,7 +132,7 @@ const refJson = (types, products) => `Справочник видов: ${JSON.st
 const jsonOf = (raw) => JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
 
 async function parse(text, types) {
-  const products = PROD.list();
+  const products = await PROD.list();
   const valid = (items) => validItems(items, types, products);
   if (enabled()) {
     try {
@@ -157,7 +156,7 @@ async function photo(dataUrl, types) {
   if (!enabled()) return { items: [], source: 'off', note: 'ИИ не подключён (нет ключа API) — распознавание по фото недоступно, фото можно прикрепить к записи' };
   const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(dataUrl || '');
   if (!m) throw new Error('Нужно фото в формате JPEG/PNG');
-  const products = PROD.list();
+  const products = await PROD.list();
   try {
     const response = await getClient().beta.messages.create({
       model: MODEL, max_tokens: 1500, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: 'low' },

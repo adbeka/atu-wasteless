@@ -47,17 +47,19 @@ function periodRange(kind, value) {
   return { from: `${y}-01-01`, to: `${y}-12-31`, label: `${y} год`, months: ms };
 }
 
-// Записи единого реестра (только принятые отчёты)
-function registryRows({ from, to, orgId, typeId, typeName, methodId, statuses = ['accepted'] } = {}) {
+// Записи единого реестра (по умолчанию только принятые отчёты). tenantId — изоляция данных компании.
+async function registryRows({ tenantId, reportId, from, to, orgId, typeId, typeName, methodId, statuses = ['accepted'] } = {}) {
   const where = [`r.status IN (${statuses.map(() => '?').join(',')})`];
   const p = [...statuses];
+  if (tenantId) { where.push('o.tenant_id = ?'); p.push(+tenantId); }
+  if (reportId) { where.push('r.id = ?'); p.push(+reportId); }
   if (from) { where.push('e.date >= ?'); p.push(from); }
   if (to) { where.push('e.date <= ?'); p.push(to); }
   if (orgId) { where.push('r.org_id = ?'); p.push(+orgId); }
   if (typeId) { where.push('e.waste_type_id = ?'); p.push(+typeId); }
   if (typeName) { where.push('w.name = ?'); p.push(String(typeName)); }
   if (methodId) { where.push('e.method_id = ?'); p.push(+methodId); }
-  return db.prepare(`
+  return (await db.prepare(`
     SELECT e.id, e.date, e.qty, e.photo, e.created_at, e.source, r.id report_id, r.period, r.org_id,
       o.name org_name, o.short org_short, o.type org_type,
       w.id type_id, w.name type_name, w.unit, w.kg_per_unit, w.recyclable, w.co2_factor, w.category,
@@ -71,7 +73,7 @@ function registryRows({ from, to, orgId, typeId, typeName, methodId, statuses = 
     LEFT JOIN disposal_methods rm ON rm.id = w.recommended_method_id
     JOIN users u ON u.id = e.user_id
     WHERE ${where.join(' AND ')}
-    ORDER BY e.date DESC, e.id DESC`).all(...p).map(enrich);
+    ORDER BY e.date DESC, e.id DESC`).all(...p)).map(enrich);
 }
 
 function enrich(row) {
@@ -98,10 +100,10 @@ function coveredDays(ym) {
 }
 
 // ---------- Dashboard ----------
-function dashboard({ from, to, orgId, anomalyFrom }) {
-  const rows = registryRows({ from, to, orgId });
+async function dashboard({ tenantId, from, to, orgId, anomalyFrom, statuses }) {
+  const rows = await registryRows({ tenantId, from, to, orgId, statuses });
   const months = monthsBetween(from.slice(0, 7), to.slice(0, 7));
-  const orgs = db.prepare('SELECT id, short, name FROM organizations WHERE active=1 ORDER BY id').all()
+  const orgs = (await db.prepare('SELECT id, short, name FROM organizations WHERE active=1 AND tenant_id=? ORDER BY id').all(+tenantId))
     .filter((o) => !orgId || o.id === +orgId);
 
   const byMonth = groupBy(rows, (r) => r.date.slice(0, 7));
@@ -143,11 +145,11 @@ function dashboard({ from, to, orgId, anomalyFrom }) {
   // для коротких периодов (месяц/квартал) база для отклонений берётся из 3 предыдущих месяцев
   let anomalies;
   if (anomalyFrom) {
-    const ext = registryRows({ from: anomalyFrom, to, orgId });
+    const ext = await registryRows({ tenantId, from: anomalyFrom, to, orgId, statuses });
     const extMonths = monthsBetween(anomalyFrom.slice(0, 7), to.slice(0, 7)).filter((m) => ext.some((r) => r.date.startsWith(m)));
     anomalies = findAnomalies(ext, extMonths).filter((a) => a.month >= from.slice(0, 7));
   } else anomalies = findAnomalies(rows, dataMonths);
-  const insights = buildInsights({ rows, months: dataMonths, monthly, byType, byOrg, kpi, compare, anomalies, orgs, from, to });
+  const insights = await buildInsights({ tenantId, rows, months: dataMonths, monthly, byType, byOrg, kpi, compare, anomalies, orgs, from, to });
   // какие продукты выбрасывают (если при вводе указан продукт) и во сколько это обходится по ценам справочника
   const byProduct = [...groupBy(rows.filter((r) => r.product_name), "product_name").entries()].map(([name, rs]) => ({ name, kg: r1(sum(rs)), kzt: Math.round(sum(rs, (r) => r.kg * (r.price_kzt_kg || 0))) })).sort((a, b) => b.kg - a.kg).slice(0, 12);
   return { from, to, months, orgs: orgs.map((o) => o.short), monthly, byType, byOrg, byMethod, byProduct, kpi, compare, anomalies, insights };
@@ -236,7 +238,7 @@ const ADVICE = [
 ];
 const adviceFor = (name) => (ADVICE.find(([re]) => re.test(name)) || [, 'проанализировать причины образования и норматив'])[1];
 
-function buildInsights({ rows, months, monthly, byType, byOrg, kpi, compare, anomalies, orgs, from, to }) {
+async function buildInsights({ tenantId, rows, months, monthly, byType, byOrg, kpi, compare, anomalies, orgs, from, to }) {
   const ins = [];
   if (!rows.length) return [{ level: 'info', title: 'Нет данных', text: 'За выбранный период нет принятых отчётов.' }];
   const days = months.reduce((a, m) => a + coveredDays(m), 0) || 1;
@@ -309,25 +311,25 @@ function buildInsights({ rows, months, monthly, byType, byOrg, kpi, compare, ano
   // Несдавшие за последний закрытый месяц
   const lastClosed = months.filter((m) => m < today().slice(0, 7)).pop();
   if (lastClosed) {
-    const miss = missingReports(lastClosed).filter((o) => orgs.some((x) => x.id === o.id));
+    const miss = (await missingReports(tenantId, lastClosed)).filter((o) => orgs.some((x) => x.id === o.id));
     if (miss.length) ins.push({ level: 'warn', title: 'Несданные отчёты', text: `За ${monthFull(lastClosed)} нет принятого отчёта: ${miss.map((m) => m.short).join(', ')}.` });
   }
   return ins;
 }
 
 // Организации без принятого отчёта за период
-function missingReports(period) {
+function missingReports(tenantId, period) {
   return db.prepare(`
     SELECT o.id, o.name, o.short, COALESCE(r.status, 'нет отчёта') status
     FROM organizations o LEFT JOIN reports r ON r.org_id = o.id AND r.period = ?
-    WHERE o.active = 1 AND (r.status IS NULL OR r.status <> 'accepted') ORDER BY o.id`).all(period);
+    WHERE o.active = 1 AND o.tenant_id = ? AND (r.status IS NULL OR r.status <> 'accepted') ORDER BY o.id`).all(period, +tenantId);
 }
 
 // ---------- Сводный отчёт ----------
-function summary(kind, value) {
+async function summary(tenantId, kind, value) {
   const pr = periodRange(kind, value);
-  const rows = registryRows({ from: pr.from, to: pr.to });
-  const orgs = db.prepare('SELECT * FROM organizations WHERE active=1 ORDER BY id').all();
+  const rows = await registryRows({ tenantId, from: pr.from, to: pr.to });
+  const orgs = await db.prepare('SELECT * FROM organizations WHERE active=1 AND tenant_id=? ORDER BY id').all(+tenantId);
   const out = [];
   for (const o of orgs) {
     const orows = rows.filter((r) => r.org_id === o.id);
@@ -337,13 +339,14 @@ function summary(kind, value) {
       qty: r1(sum(rs, (r) => r.qty)), kg: r1(sum(rs)), co2: r1(sum(rs, (r) => r.co2)),
       methods: [...new Set(rs.map((r) => r.method_name))].join(', '),
     })).sort((a, b) => b.kg - a.kg);
-    const statuses = pr.months.map((m) => db.prepare('SELECT status FROM reports WHERE org_id=? AND period=?').get(o.id, m)?.status || 'нет');
+    const statuses = [];
+    for (const m of pr.months) statuses.push((await db.prepare('SELECT status FROM reports WHERE org_id=? AND period=?').get(o.id, m))?.status || 'нет');
     out.push({ id: o.id, name: o.name, short: o.short, type: o.type, types, statuses,
       kg: r1(sum(orows)), co2: r1(sum(orows, (r) => r.co2)), recyclableKg: r1(sum(orows.filter((r) => r.recyclable === 2))) });
   }
   const total = sum(rows);
   const back = new Date(pr.from + 'T00:00:00Z'); back.setUTCMonth(back.getUTCMonth() - 3);
-  const dash = dashboard({ from: pr.from, to: pr.to, anomalyFrom: back.toISOString().slice(0, 10) });
+  const dash = await dashboard({ tenantId, from: pr.from, to: pr.to, anomalyFrom: back.toISOString().slice(0, 10) });
   return {
     kind, value, label: pr.label, from: pr.from, to: pr.to, months: pr.months.map(monthLabel), monthKeys: pr.months,
     orgs: out, totalKg: r1(total), totalCo2: r1(sum(rows, (r) => r.co2)),
@@ -354,18 +357,18 @@ function summary(kind, value) {
 }
 
 // ---------- Автопроверка отчёта для проверяющего ----------
-function reportChecks(reportId) {
-  const rep = db.prepare('SELECT r.*, o.type org_type FROM reports r JOIN organizations o ON o.id=r.org_id WHERE r.id=?').get(reportId);
-  const rows = registryRows({ statuses: ['draft', 'submitted', 'in_review', 'accepted', 'returned'] }).filter((r) => r.report_id === reportId);
+async function reportChecks(reportId) {
+  const rep = await db.prepare('SELECT r.*, o.type org_type FROM reports r JOIN organizations o ON o.id=r.org_id WHERE r.id=?').get(reportId);
+  const rows = await registryRows({ reportId, statuses: ['draft', 'submitted', 'in_review', 'accepted', 'returned'] });
   const checks = [];
   if (!rows.length) return [{ level: 'warn', text: 'В отчёте нет ни одной записи.' }];
 
   // сравнение со средним по принятым отчётам организации за 3 прошлых месяца
-  const prev = db.prepare(`SELECT period FROM reports WHERE org_id=? AND status='accepted' AND period < ? ORDER BY period DESC LIMIT 3`).all(rep.org_id, rep.period).map((x) => x.period);
+  const prev = (await db.prepare(`SELECT period FROM reports WHERE org_id=? AND status='accepted' AND period < ? ORDER BY period DESC LIMIT 3`).all(rep.org_id, rep.period)).map((x) => x.period);
   const cd = coveredDays(rep.period);
   const curPerDay = sum(rows) / cd;
   if (prev.length) {
-    const prows = registryRows({ orgId: rep.org_id }).filter((r) => prev.includes(r.period));
+    const prows = (await registryRows({ orgId: rep.org_id })).filter((r) => prev.includes(r.period));
     const avg = sum(prows) / prev.reduce((a, m) => a + daysInMonth(m), 0);
     const ch = pct(curPerDay, avg);
     checks.push({ level: Math.abs(ch) > ANOMALY_PCT ? 'warn' : 'good',
@@ -406,11 +409,11 @@ function reportChecks(reportId) {
 // statuses: по умолчанию все статусы — оперативные данные организации, а не только принятые.
 const ALL_ST = ['draft', 'submitted', 'in_review', 'accepted', 'returned'];
 const addDays = (d, k) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + k); return x.toISOString().slice(0, 10); };
-function periodStats({ orgId, from, to, statuses = ALL_ST }) {
-  const rows = registryRows({ from, to, orgId, statuses });
+async function periodStats({ tenantId, orgId, from, to, statuses = ALL_ST }) {
+  const rows = await registryRows({ tenantId, from, to, orgId, statuses });
   const days = Math.round((new Date(to) - new Date(from)) / 864e5) + 1;
   const pFrom = addDays(from, -days), pTo = addDays(from, -1);
-  const prev = registryRows({ from: pFrom, to: pTo, orgId, statuses });
+  const prev = await registryRows({ tenantId, from: pFrom, to: pTo, orgId, statuses });
   const kg = sum(rows), pkg = sum(prev);
   const byType = [...groupBy(rows, 'type_name').entries()].map(([name, rs]) => ({ name, unit: rs[0].unit, qty: r1(sum(rs, (r) => r.qty)), kg: r1(sum(rs)) })).sort((a, b) => b.kg - a.kg);
   const byDay = []; for (let i = 0; i < days && i < 400; i++) { const d = addDays(from, i); byDay.push({ date: d, kg: r1(sum(rows.filter((r) => r.date === d))) }); }
@@ -430,4 +433,4 @@ function namedPeriod(name) {
   return { from: mStart(y, q * 3 - 2), to: t, label: `${q} квартал ${y}` };
 }
 
-module.exports = { periodStats, namedPeriod, ALL_ST, minPeriod, registryRows, dashboard, summary, reportChecks, missingReports, periodRange, monthsBetween, monthLabel, monthFull, today, ANOMALY_PCT, UNSOLD_PRICE_KZT };
+module.exports = { addDays, periodStats, namedPeriod, ALL_ST, minPeriod, registryRows, dashboard, summary, reportChecks, missingReports, periodRange, monthsBetween, monthLabel, monthFull, today, ANOMALY_PCT, UNSOLD_PRICE_KZT };

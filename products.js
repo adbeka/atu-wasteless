@@ -5,17 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { db, nowIso } = require('./db');
 
-db.exec(`CREATE TABLE IF NOT EXISTS products (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
-  name_kz TEXT,
-  synonyms TEXT NOT NULL DEFAULT '',     -- через запятую, рус/каз
-  kind TEXT NOT NULL DEFAULT 'plate',    -- род отхода, см. KINDS
-  price_kzt_kg REAL NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1,
-  updated_at TEXT
-)`);
-try { db.exec('ALTER TABLE entries ADD COLUMN product_id INTEGER REFERENCES products(id)'); } catch { /* уже есть */ }
+// таблица products — в db.js (synonyms через запятую, kind — род отхода, см. KINDS); справочник общий для платформы
 
 // род → какие виды отходов организации подходят (по названию), по порядку предпочтения
 const KINDS = {
@@ -42,7 +32,7 @@ const KINDS = {
 
 const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').trim();
 
-function importRows(rows) {
+async function importRows(rows) {
   let added = 0, updated = 0;
   const up = db.prepare('SELECT id FROM products WHERE lower(name)=lower(?)');
   for (const r of rows) {
@@ -50,9 +40,9 @@ function importRows(rows) {
     const kind = KINDS[String(r.kind || '').trim()] ? String(r.kind).trim() : 'plate';
     const price = Number(String(r.price_kzt_kg ?? 0).replace(',', '.')) || 0;
     const syn = String(r.synonyms || '').split(/[,;|]/).map((x) => x.trim()).filter(Boolean).join(',');
-    const ex = up.get(name);
-    if (ex) { db.prepare('UPDATE products SET name_kz=?, synonyms=?, kind=?, price_kzt_kg=?, active=1, updated_at=? WHERE id=?').run(r.name_kz || null, syn, kind, price, nowIso(), ex.id); updated++; }
-    else { db.prepare('INSERT INTO products (name, name_kz, synonyms, kind, price_kzt_kg, updated_at) VALUES (?,?,?,?,?,?)').run(name, r.name_kz || null, syn, kind, price, nowIso()); added++; }
+    const ex = await up.get(name);
+    if (ex) { await db.prepare('UPDATE products SET name_kz=?, synonyms=?, kind=?, price_kzt_kg=?, active=1, updated_at=? WHERE id=?').run(r.name_kz || null, syn, kind, price, nowIso(), ex.id); updated++; }
+    else { await db.prepare('INSERT INTO products (name, name_kz, synonyms, kind, price_kzt_kg, updated_at) VALUES (?,?,?,?,?,?)').run(name, r.name_kz || null, syn, kind, price, nowIso()); added++; }
   }
   return { added, updated };
 }
@@ -62,11 +52,10 @@ function parseCsv(text) {
   const head = lines[0].split(sep).map((h) => norm(h));
   return lines.slice(1).map((l) => { const c = l.split(sep); return Object.fromEntries(head.map((h, i) => [h, (c[i] || '').trim()])); });
 }
-function seedIfEmpty() {
-  if (db.prepare('SELECT COUNT(*) n FROM products').get().n) return;
-  importRows(parseCsv(fs.readFileSync(path.join(__dirname, 'reference', 'products.csv'), 'utf8')));
+async function seedIfEmpty() {
+  if ((await db.prepare('SELECT COUNT(*) n FROM products').get()).n) return 0;
+  return (await importRows(parseCsv(fs.readFileSync(path.join(__dirname, 'reference', 'products.csv'), 'utf8')))).added;
 }
-seedIfEmpty();
 
 const list = (all) => db.prepare(`SELECT * FROM products ${all ? '' : 'WHERE active=1'} ORDER BY kind, name`).all();
 
@@ -78,7 +67,7 @@ function typeFor(product, types) {
 }
 
 // найти продукты во фрагменте текста: самое длинное совпадение синонима
-function findProduct(fragment, products = list()) {
+function findProduct(fragment, products) {
   const t = ' ' + norm(fragment).replace(/[^a-zа-яәіңғүұқөһ0-9 -]/gi, ' ') + ' ';
   let best = null, bestLen = 0;
   for (const p of products) {
@@ -93,4 +82,4 @@ function findProduct(fragment, products = list()) {
   return best;
 }
 
-module.exports = { KINDS, list, importRows, parseCsv, typeFor, findProduct };
+module.exports = { KINDS, list, importRows, parseCsv, typeFor, findProduct, seedIfEmpty };
