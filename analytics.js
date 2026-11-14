@@ -62,8 +62,9 @@ function registryRows({ from, to, orgId, typeId, typeName, methodId, statuses = 
       o.name org_name, o.short org_short, o.type org_type,
       w.id type_id, w.name type_name, w.unit, w.kg_per_unit, w.recyclable, w.co2_factor, w.category,
       m.id method_id, m.name method_name, m.is_recycling, m.co2_factor method_co2, m.rank method_rank,
-      rm.name rec_name, rm.co2_factor rec_co2, u.full_name user_name
+      rm.name rec_name, rm.co2_factor rec_co2, u.full_name user_name, e.product_id, pr.name product_name, pr.price_kzt_kg
     FROM entries e JOIN reports r ON r.id = e.report_id
+    LEFT JOIN products pr ON pr.id = e.product_id
     JOIN organizations o ON o.id = r.org_id
     JOIN waste_types w ON w.id = e.waste_type_id
     JOIN disposal_methods m ON m.id = e.method_id
@@ -147,7 +148,9 @@ function dashboard({ from, to, orgId, anomalyFrom }) {
     anomalies = findAnomalies(ext, extMonths).filter((a) => a.month >= from.slice(0, 7));
   } else anomalies = findAnomalies(rows, dataMonths);
   const insights = buildInsights({ rows, months: dataMonths, monthly, byType, byOrg, kpi, compare, anomalies, orgs, from, to });
-  return { from, to, months, orgs: orgs.map((o) => o.short), monthly, byType, byOrg, byMethod, kpi, compare, anomalies, insights };
+  // какие продукты выбрасывают (если при вводе указан продукт) и во сколько это обходится по ценам справочника
+  const byProduct = [...groupBy(rows.filter((r) => r.product_name), "product_name").entries()].map(([name, rs]) => ({ name, kg: r1(sum(rs)), kzt: Math.round(sum(rs, (r) => r.kg * (r.price_kzt_kg || 0))) })).sort((a, b) => b.kg - a.kg).slice(0, 12);
+  return { from, to, months, orgs: orgs.map((o) => o.short), monthly, byType, byOrg, byMethod, byProduct, kpi, compare, anomalies, insights };
 }
 
 // Сравнение периодов: последний месяц к предыдущему, квартал к кварталу (по среднесуточному)

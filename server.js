@@ -16,6 +16,9 @@ const { db, hashPassword, checkPassword, nowIso } = require('./db');
 const A = require('./analytics');
 const { buildSummaryXlsx, buildEntriesXlsx, buildEntriesCsv } = require('./export');
 const AI = require('./ai');
+const PROD = require('./products');
+const GOALS = require('./goals');
+const FC = require('./forecast');
 
 const PORT = Number(process.env.PORT || 3000);
 const UPLOADS = path.join(__dirname, 'data', 'uploads');
@@ -102,6 +105,12 @@ app.post('/api/register', (req, res) => {
   res.json({ ok: true });
 });
 app.get('/api/me', (req, res) => res.json({ user: req.user || null }));
+// язык интерфейса — запоминаем на сервере, чтобы Telegram-бот отвечал на том же языке
+app.put('/api/me/lang', auth(), (req, res) => {
+  const lang = req.body?.lang === 'kz' ? 'kz' : 'ru';
+  db.prepare('UPDATE users SET lang=? WHERE id=?').run(lang, req.user.id);
+  res.json({ ok: true, lang });
+});
 
 // адрес, по которому система доступна снаружи: PUBLIC_URL из .env → адрес туннеля из запроса → IP в локальной сети
 function publicUrl(req) {
@@ -380,7 +389,20 @@ function validateEntry(user, b, existingId) {
   if (!db.prepare('SELECT id FROM disposal_methods WHERE id=? AND active=1').get(+b.method_id)) return 'Выберите способ утилизации';
   return { date, qty, w };
 }
+// фото, загруженное для распознавания, можно один раз привязать к записи (не загружая повторно)
+const photoRefs = new Map(); // name -> { userId, at }
+function takePhotoRef(user, name) {
+  const r = name && photoRefs.get(String(name));
+  if (!r || r.userId !== user.id || Date.now() - r.at > 3600e3) return null;
+  return String(name);
+}
 app.post('/api/entries', auth('resp'), (req, res) => {
+  // офлайн-очередь: client_id — защита от повторной отправки той же записи
+  const clientId = req.body?.client_id ? String(req.body.client_id).slice(0, 64) : null;
+  if (clientId) {
+    const ex = db.prepare('SELECT e.id, e.report_id FROM entries e WHERE e.client_id=? AND e.user_id=?').get(clientId, req.user.id);
+    if (ex) return res.json({ id: ex.id, duplicate: true, report: reportFull(ex.report_id) });
+  }
   const v = validateEntry(req.user, req.body || {});
   if (typeof v === 'string') return bad(res, v);
   const rep = getOrCreateReport(req.user.org_id, v.date.slice(0, 7));
@@ -389,10 +411,11 @@ app.post('/api/entries', auth('resp'), (req, res) => {
     const dup = db.prepare('SELECT id FROM entries WHERE report_id=? AND date=? AND waste_type_id=? AND qty=?').get(rep.id, v.date, v.w.id, v.qty);
     if (dup) return bad(res, `Похоже на дубль: «${v.w.name}» ${v.qty} ${v.w.unit} за эту дату уже внесено. Сохранить всё равно?`, 409, { duplicate: true });
   }
-  const photo = savePhoto(req.body.photo);
-  const source = ['manual', 'voice'].includes(req.body.source) ? req.body.source : 'manual';
-  const r = db.prepare('INSERT INTO entries (report_id, date, waste_type_id, qty, method_id, user_id, photo, note, created_at, source) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    .run(rep.id, v.date, v.w.id, v.qty, +req.body.method_id, req.user.id, photo, req.body.note || null, nowIso(), source);
+  const photo = takePhotoRef(req.user, req.body.photo_ref) || savePhoto(req.body.photo);
+  const source = ['manual', 'voice', 'photo', 'offline'].includes(req.body.source) ? req.body.source : 'manual';
+  const prod = req.body.product_id ? db.prepare('SELECT id FROM products WHERE id=?').get(+req.body.product_id) : null;
+  const r = db.prepare('INSERT INTO entries (report_id, date, waste_type_id, qty, method_id, user_id, photo, note, created_at, source, product_id, client_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(rep.id, v.date, v.w.id, v.qty, +req.body.method_id, req.user.id, photo, req.body.note || null, nowIso(), source, prod ? prod.id : null, clientId);
   res.json({ id: Number(r.lastInsertRowid), report: reportFull(rep.id) });
 });
 function ownEditableEntry(req, res) {
@@ -406,7 +429,8 @@ app.put('/api/entries/:id', auth('resp'), (req, res) => {
   const v = validateEntry(req.user, { ...e, ...req.body });
   if (typeof v === 'string') return bad(res, v);
   if (v.date.slice(0, 7) !== e.date.slice(0, 7)) return bad(res, 'Перенос записи в другой месяц невозможен — удалите и внесите заново');
-  db.prepare('UPDATE entries SET date=?, waste_type_id=?, qty=?, method_id=? WHERE id=?').run(v.date, v.w.id, v.qty, +(req.body.method_id ?? e.method_id), e.id);
+  const pid = req.body.product_id === undefined ? e.product_id : (req.body.product_id ? +req.body.product_id : null);
+  db.prepare('UPDATE entries SET date=?, waste_type_id=?, qty=?, method_id=?, product_id=? WHERE id=?').run(v.date, v.w.id, v.qty, +(req.body.method_id ?? e.method_id), pid, e.id);
   res.json({ ok: true, report: reportFull(e.report_id) });
 });
 app.delete('/api/entries/:id', auth('resp'), (req, res) => {
@@ -454,7 +478,20 @@ app.get('/api/my-summary', auth('resp'), (req, res) => {
   const month = A.periodStats({ orgId: req.user.org_id, ...A.namedPeriod('month') });
   const today = A.periodStats({ orgId: req.user.org_id, from: t, to: t });
   const rep = getOrCreateReport(req.user.org_id, t.slice(0, 7));
-  res.json({ today: strip(today), week: strip(week), month: strip(month), report: { id: rep.id, status: rep.status, status_ru: STATUS_RU[rep.status], period: rep.period, last_comment: rep.last_comment } });
+  const rt = GOALS.rating();
+  const mine = rt.rows.find((r) => r.org_id === req.user.org_id);
+  res.json({ today: strip(today), week: strip(week), month: strip(month), report: { id: rep.id, status: rep.status, status_ru: STATUS_RU[rep.status], period: rep.period, last_comment: rep.last_comment },
+    goal: mine ? { ...mine, of: rt.rows.length } : null });
+});
+
+// ---------- цели и рейтинг подразделений ----------
+app.get('/api/rating', auth(), (req, res) => {
+  const p = /^\d{4}-\d{2}$/.test(String(req.query.period || '')) ? req.query.period : undefined;
+  res.json({ ...GOALS.rating(p), myOrg: req.user.org_id || null });
+});
+app.put('/api/goals/:orgId', auth('reviewer', 'admin'), (req, res) => {
+  if (!db.prepare('SELECT id FROM organizations WHERE id=?').get(+req.params.orgId)) return bad(res, 'Организация не найдена', 404);
+  res.json(GOALS.setGoal(+req.params.orgId, req.body || {}, req.user.id));
 });
 app.get('/api/my-report.xlsx', auth('resp'), async (req, res) => {
   const p = A.namedPeriod(['week', 'month', 'quarter', 'prev_month'].includes(req.query.p) ? req.query.p : 'month');
@@ -539,9 +576,67 @@ app.get('/api/ai/status', auth(), (_req, res) => res.json({ enabled: AI.enabled(
 app.post('/api/ai/parse', auth('resp'), async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return bad(res, 'Скажите или напишите, что взвесили');
-  const types = db.prepare('SELECT id, name, unit, default_method_id FROM waste_types WHERE (org_id=? OR org_id IS NULL) AND active=1').all(req.user.org_id);
+  const types = orgTypes(req.user.org_id);
   const r = await AI.parse(text, types);
-  res.json({ ...r, items: r.items.map((x) => { const t = types.find((y) => y.id === x.waste_type_id); return { ...x, name: t.name, unit: t.unit, method_id: t.default_method_id }; }) });
+  res.json({ ...r, items: withNames(r.items, types) });
+});
+const orgTypes = (orgId) => db.prepare('SELECT id, name, unit, category, default_method_id FROM waste_types WHERE (org_id=? OR org_id IS NULL) AND active=1').all(orgId);
+const withNames = (items, types) => items.map((x) => { const t = types.find((y) => y.id === x.waste_type_id); return { ...x, name: t.name, unit: t.unit, method_id: t.default_method_id }; });
+// распознавание по фото: продукт/вид и вес (табло весов или оценка); фото сохраняется и привязывается к записям
+app.post('/api/ai/photo', auth('resp'), async (req, res) => {
+  const name = savePhoto(req.body?.photo);
+  if (!name) return bad(res, 'Приложите фото (JPEG/PNG)');
+  photoRefs.set(name, { userId: req.user.id, at: Date.now() });
+  const types = orgTypes(req.user.org_id);
+  try {
+    const r = await AI.photo(req.body.photo, types);
+    res.json({ ...r, items: withNames(r.items, types), photo_ref: name });
+  } catch (e) { bad(res, e.message); }
+});
+
+// ---------- справочник продуктов (датасет) ----------
+app.get('/api/products', auth(), (req, res) => {
+  const all = req.query.all === '1' && req.user.role === 'admin';
+  const rows = PROD.list(all);
+  const used = Object.fromEntries(db.prepare('SELECT product_id, COUNT(*) n FROM entries WHERE product_id IS NOT NULL GROUP BY product_id').all().map((r) => [r.product_id, r.n]));
+  // для ответственного лица — сразу вид отхода его организации, куда попадёт продукт
+  const types = req.user.org_id ? orgTypes(req.user.org_id) : null;
+  res.json({ kinds: Object.fromEntries(Object.entries(PROD.KINDS).map(([k, v]) => [k, v.label])),
+    products: rows.map((p) => ({ ...p, used: used[p.id] || 0, ...(types ? { type_id: PROD.typeFor(p, types)?.id || null } : {}) })) });
+});
+app.post('/api/products', auth('admin'), (req, res) => {
+  const b = req.body || {};
+  if (!String(b.name || '').trim()) return bad(res, 'Укажите название продукта');
+  res.json(PROD.importRows([b]));
+});
+app.put('/api/products/:id', auth('admin'), (req, res) => {
+  const p = db.prepare('SELECT * FROM products WHERE id=?').get(+req.params.id);
+  if (!p) return bad(res, 'Продукт не найден', 404);
+  const b = { ...p, ...req.body };
+  db.prepare('UPDATE products SET name_kz=?, synonyms=?, kind=?, price_kzt_kg=?, active=?, updated_at=? WHERE id=?')
+    .run(b.name_kz || null, String(b.synonyms || ''), PROD.KINDS[b.kind] ? b.kind : p.kind, Number(b.price_kzt_kg) || 0, b.active ? 1 : 0, nowIso(), p.id);
+  res.json({ ok: true });
+});
+// импорт датасета: CSV (name;name_kz;synonyms;kind;price_kzt_kg) или xlsx с теми же столбцами
+app.post('/api/products/import', auth('admin'), async (req, res) => {
+  const m = /^data:([^;]*);base64,(.+)$/.exec(String(req.body?.file || ''));
+  if (!m) return bad(res, 'Приложите файл .csv или .xlsx');
+  const buf = Buffer.from(m[2], 'base64');
+  try {
+    let rows;
+    if (/sheet|excel|xlsx/.test(m[1]) || buf.slice(0, 2).toString() === 'PK') {
+      const ExcelJS = require('exceljs'); const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf);
+      const ws = wb.worksheets[0]; const head = ws.getRow(1).values.slice(1).map((h) => String(h || '').toLowerCase().trim());
+      rows = []; ws.eachRow((r, i) => { if (i > 1) rows.push(Object.fromEntries(head.map((h, j) => [h, String(r.values[j + 1]?.text ?? r.values[j + 1] ?? '')]))); });
+    } else rows = PROD.parseCsv(buf.toString('utf8'));
+    if (!rows.length || !('name' in rows[0])) return bad(res, 'Нужен столбец name (и по желанию name_kz, synonyms, kind, price_kzt_kg)');
+    res.json(PROD.importRows(rows));
+  } catch (e) { bad(res, 'Не удалось прочитать файл: ' + e.message); }
+});
+app.get('/api/products.csv', auth('admin'), (_req, res) => {
+  const rows = PROD.list(true);
+  const csv = '\uFEFFname;name_kz;synonyms;kind;price_kzt_kg\n' + rows.map((p) => [p.name, p.name_kz || '', p.synonyms, p.kind, p.price_kzt_kg].join(';')).join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', 'attachment; filename="products.csv"'); res.send(csv);
 });
 app.get('/api/ai/conclusion', auth(), async (req, res) => {
   let facts;
@@ -605,12 +700,44 @@ app.post('/api/scale/devices', auth('admin'), (req, res) => {
   res.json({ token }); // показывается один раз
 });
 
+// ---------- производство и прогноз «сколько готовить» ----------
+const orgParam = (req) => (req.user.role === 'resp' ? req.user.org_id : +req.query.org || +req.body?.org_id || null);
+const isoDate = (v, def) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : def);
+app.get('/api/forecast', auth(), (req, res) => {
+  const orgId = orgParam(req);
+  if (!orgId) return bad(res, 'Выберите организацию');
+  let date = isoDate(req.query.date, FC.addDays(A.today(), 1));
+  let f = FC.forecast(orgId, date);
+  // без явной даты: если завтра выходной — показываем ближайший рабочий день
+  for (let k = 0; !req.query.date && f.closed && k < 6; k++) { date = FC.addDays(date, 1); f = FC.forecast(orgId, date); }
+  res.json({ ...f, track: FC.track(orgId, A.today()) });
+});
+// итог дня по блюдам: приготовлено / осталось; плюс блюда, которые организация обычно готовит
+app.get('/api/production', auth(), (req, res) => {
+  const orgId = orgParam(req);
+  if (!orgId) return bad(res, 'Выберите организацию');
+  const date = isoDate(req.query.date, A.today());
+  const usual = db.prepare(`SELECT pr.id product_id, pr.name, pr.name_kz, COUNT(*) n FROM production p JOIN products pr ON pr.id=p.product_id
+    WHERE p.org_id=? AND p.date >= ? GROUP BY pr.id ORDER BY n DESC, pr.name`).all(orgId, FC.addDays(date, -42));
+  res.json({ date, rows: FC.dayRows(orgId, date), usual });
+});
+app.post('/api/production', auth('resp'), (req, res) => {
+  const date = isoDate(req.body?.date, null);
+  if (!date) return bad(res, 'Укажите дату');
+  if (date > A.today()) return bad(res, 'Дата не может быть в будущем');
+  if (date < FC.addDays(A.today(), -14)) return bad(res, 'Итог дня можно внести не позже чем через 14 дней');
+  try { res.json({ saved: FC.saveDay(req.user.org_id, req.user.id, date, Array.isArray(req.body.items) ? req.body.items : []) }); }
+  catch (e) { bad(res, e.message); }
+});
+
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
 (async () => {
   // первый запуск — справочник организаторов + демо-данные
   if (!db.prepare('SELECT COUNT(*) c FROM organizations').get().c) await require('./seed').seed();
-  BOT = require('./telegram').start({ db, A, AI, getOrCreateReport, reportFull, setStatus, validateEntry, EDITABLE, STATUS_RU, nowIso,
+  // демо-история производства для прогноза (только если таблица пустая; отключить: NO_DEMO_PRODUCTION=1)
+  if (!process.env.NO_DEMO_PRODUCTION) { const n = FC.seedDemo(A.today()); if (n) console.log(`Демо-история производства: ${n} строк`); }
+  BOT = require('./telegram').start({ db, A, AI, PROD, savePhoto, getOrCreateReport, reportFull, setStatus, validateEntry, EDITABLE, STATUS_RU, nowIso,
     buildEntriesXlsx, buildSummaryXlsx, publicUrl: () => process.env.PUBLIC_URL || lanUrl() });
   app.listen(PORT, '0.0.0.0', () => {
   console.log(`АТУ · учёт пищевых отходов: http://localhost:${PORT}`);

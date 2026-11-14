@@ -126,12 +126,13 @@ function getSettings() {
     systemName: s.systemName || 'Wasteless',
     company: s.company || 'АО «Алматинский технологический университет»',
     orgLabel: s.orgLabel || INDUSTRIES[ind].orgLabel, orgsLabel: s.orgsLabel || INDUSTRIES[ind].orgsLabel,
+    cupDiscountKzt: Number(s.cupDiscountKzt ?? 100), // скидка в кофейне за свою кружку, ₸
     industries: Object.entries(INDUSTRIES).map(([k, v]) => ({ key: k, label: v.label, example: v.example, orgLabel: v.orgLabel })),
   };
 }
 function setSettings(b) {
   const up = db.prepare('INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
-  for (const k of ['systemName', 'company', 'orgLabel', 'orgsLabel', 'industry']) if (b[k] != null) up.run(k, String(b[k]).slice(0, 120));
+  for (const k of ['systemName', 'company', 'orgLabel', 'orgsLabel', 'industry', 'cupDiscountKzt']) if (b[k] != null) up.run(k, String(b[k]).slice(0, 120));
   if (b.industry && INDUSTRIES[b.industry] && b.resetLabels) { up.run('orgLabel', INDUSTRIES[b.industry].orgLabel); up.run('orgsLabel', INDUSTRIES[b.industry].orgsLabel); }
 }
 function applyIndustry(key, orgId) {

@@ -5,7 +5,7 @@ const crypto = require('crypto');
 function start(deps) {
   // TELEGRAM_BOT_DISABLED=1 — не запускать бота в этом экземпляре (бот может работать только в одном месте: ноутбук ИЛИ Railway)
   const TOKEN = process.env.TELEGRAM_BOT_DISABLED ? '' : process.env.TELEGRAM_BOT_TOKEN;
-  const { db, A, AI, getOrCreateReport, reportFull, setStatus, validateEntry, EDITABLE, STATUS_RU, nowIso, buildEntriesXlsx, buildSummaryXlsx } = deps;
+  const { db, A, AI, savePhoto, getOrCreateReport, reportFull, setStatus, validateEntry, EDITABLE, STATUS_RU, nowIso, buildEntriesXlsx, buildSummaryXlsx } = deps;
   const state = { enabled: !!TOKEN, username: null, error: null, webAppUrl: null };
   if (!TOKEN) return { state, notifyReport() {} };
 
@@ -24,16 +24,37 @@ function start(deps) {
     WHERE u.tg_chat_id=? AND u.active=1`).get(String(chatId));
   const pending = new Map(); // chatId -> распознанные записи, ждущие подтверждения
 
+  const KZ = (u) => u?.lang === 'kz';
+  const L = (u, ru, kz) => (KZ(u) ? kz : ru);
+  const HELP_KZ = `<b>Өлшеулерді қалай енгізу керек</b>
+Не өлшегеніңізді жай ғана жазыңыз, мысалы:
+<i>нан 3 кг, картоп 12 кило</i>
+Немесе 📷 қалдықтың не таразы таблосының фотосын жіберіңіз.
+Өнім мен қалдық түрін ұйымыңыздың анықтамалығы бойынша танып, растауды сұраймын.
+
+/itogi — бүгінгі және айлық қорытынды
+/plan — ертең қанша дайындау керек (болжам)
+/week — апта қорытындысы
+/quarter — тоқсан
+/report — айлық Excel-есеп
+/send — айлық есепті тексеруге жіберу
+/lang — тілді ауыстыру (рус/қаз)
+/help — осы көмек`;
+  const help = (u) => (KZ(u) ? HELP_KZ : HELP);
   const HELP = `<b>Как вносить взвешивания</b>
 Просто напишите, что взвесили, например:
 <i>отходы из зала 12 кг, масло 3 литра</i>
-Я распознаю виды отходов по справочнику вашей организации и попрошу подтвердить.
+<i>хлеб 3 кг, картошка 12 кило</i>
+Или пришлите 📷 фото отходов либо табло весов.
+Я распознаю продукт и вид отхода по справочнику вашей организации и попрошу подтвердить.
 
 /itogi — итоги за сегодня и за месяц
+/plan — сколько готовить завтра (прогноз)
 /week — неделя: итоги, топ-3, сравнение с прошлой
 /quarter — квартал к прошлому кварталу
 /report — Excel-отчёт за месяц прямо в чат
 /send — отправить отчёт за месяц на проверку
+/lang — сменить язык (рус/қаз)
 /help — эта подсказка`;
   const HELP_STAFF = `<b>Сводки по всем подразделениям</b>
 /week — неделя: итоги, лидеры, сравнение с прошлой
@@ -50,36 +71,52 @@ function start(deps) {
       db.prepare('UPDATE users SET tg_chat_id=? WHERE id=?').run(String(chatId), link.user_id);
       db.prepare('DELETE FROM tg_links WHERE user_id=?').run(link.user_id);
       const u = userByChat(chatId);
-      return send(chatId, `✅ Готово, ${h(u.full_name)}!\nАккаунт привязан${u.org_short ? ` к «${h(u.org_short)}»` : ''}.\n\n${u.role === 'resp' ? HELP : HELP_STAFF}`);
+      return send(chatId, `✅ ${L(u, 'Готово', 'Дайын')}, ${h(u.full_name)}!\n${L(u, 'Аккаунт привязан', 'Аккаунт байланыстырылды')}${u.org_short ? ` — «${h(u.org_short)}»` : ''}.\n\n${u.role === 'resp' ? help(u) : HELP_STAFF}`);
     }
     const u = userByChat(chatId);
-    if (u) return send(chatId, `Вы уже подключены как ${h(u.full_name)}.\n\n${HELP}`);
+    if (u) return send(chatId, `${L(u, 'Вы уже подключены как', 'Сіз қосылғансыз:')} ${h(u.full_name)}.\n\n${help(u)}`);
     return send(chatId, `Здравствуйте${from?.first_name ? ', ' + h(from.first_name) : ''}! Это бот учёта пищевых отходов.\n\nЧтобы подключиться, откройте веб-версию системы → «Подключить Telegram» и нажмите ссылку.`);
   }
 
   // ---------- ввод фразой ----------
-  async function onText(chatId, u, text) {
-    const types = db.prepare('SELECT id, name, unit, default_method_id FROM waste_types WHERE (org_id=? OR org_id IS NULL) AND active=1').all(u.org_id);
-    const r = await AI.parse(text, types);
-    if (!r.items.length) return send(chatId, `Не нашёл вид отхода и вес. Попробуйте так: <i>очистки овощей 15 кг</i>\n\nВиды вашей организации:\n${types.map((t) => '• ' + h(t.name)).join('\n')}`);
+  const orgTypes = (orgId) => db.prepare('SELECT id, name, unit, category, default_method_id FROM waste_types WHERE (org_id=? OR org_id IS NULL) AND active=1').all(orgId);
+  const prodLabel = (x, u) => { if (!x.product_id || !KZ(u)) return x.product; const p = db.prepare('SELECT name_kz FROM products WHERE id=?').get(x.product_id); return p?.name_kz || x.product; };
+  const itemLine = (x, u) => `• ${x.product ? h(prodLabel(x, u)) + ' → ' : ''}${h(x.name)} — <b>${fmt(x.qty)} ${x.unit}</b>${x.qty_source === 'estimate' ? ` <i>(${L(u, 'оценка', 'шамамен')})</i>` : ''}`;
+  function askConfirm(chatId, r, types, head, photo, u) {
     const items = r.items.map((x) => { const t = types.find((y) => y.id === x.waste_type_id); return { ...x, name: t.name, unit: t.unit, method_id: t.default_method_id }; });
     const key = crypto.randomBytes(4).toString('hex');
-    pending.set(String(chatId), { key, items, at: Date.now() });
-    const lines = items.map((x) => `• ${h(x.name)} — <b>${fmt(x.qty)} ${x.unit}</b>`).join('\n');
-    return send(chatId, `Распознано${r.source === 'ai' ? ' (ИИ)' : ''} за сегодня, ${A.today().split('-').reverse().join('.')}:\n${lines}${r.unknown?.length ? `\n\nНе найдено в справочнике: ${h(r.unknown.join(', '))}` : ''}`, {
-      reply_markup: { inline_keyboard: [[{ text: `✅ Сохранить (${items.length})`, callback_data: `save:${key}` }, { text: '✖ Отмена', callback_data: `cancel:${key}` }]] },
+    pending.set(String(chatId), { key, items, photo, at: Date.now() });
+    return send(chatId, `${head}, ${A.today().split('-').reverse().join('.')}:\n${items.map((x) => itemLine(x, u)).join('\n')}${r.unknown?.length ? `\n\n${L(u, 'Не найдено в справочнике', 'Анықтамалықта табылмады')}: ${h(r.unknown.join(', '))}` : ''}${r.note ? `\n\n<i>${h(r.note)}</i>` : ''}${items.some((x) => x.qty_source === 'estimate') ? '\n\n' + L(u, 'Вес оценён по фото — если взвешивали, напишите точный вес фразой.', 'Салмақ фото бойынша бағаланды — өлшеген болсаңыз, нақты салмақты жазыңыз.') : ''}`, {
+      reply_markup: { inline_keyboard: [[{ text: `✅ ${L(u, 'Сохранить', 'Сақтау')} (${items.length})`, callback_data: `save:${key}` }, { text: `✖ ${L(u, 'Отмена', 'Болдырмау')}`, callback_data: `cancel:${key}` }]] },
     });
   }
-
-  function saveItems(u, items) {
+  // фото отходов или табло весов → распознавание (Claude, зрение)
+  async function onPhoto(chatId, u, m) {
+    const ph = m.photo[m.photo.length - 1];
+    const f = await api('getFile', { file_id: ph.file_id });
+    const r0 = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${f.file_path}`, { signal: AbortSignal.timeout(30000) });
+    const dataUrl = 'data:image/jpeg;base64,' + Buffer.from(await r0.arrayBuffer()).toString('base64');
+    send(chatId, L(u, '📷 Смотрю на фото…', '📷 Фотоны қарап жатырмын…'));
+    const types = orgTypes(u.org_id);
+    const r = await AI.photo(dataUrl, types);
+    if (!r.items.length) return send(chatId, `${L(u, 'Не удалось определить отходы на фото.', 'Фотода қалдықтарды анықтау мүмкін болмады.')}${r.note ? '\n' + h(r.note) : ''}\n${L(u, 'Напишите фразой, например', 'Сөйлеммен жазыңыз, мысалы')}: <i>${L(u, 'хлеб 3 кг', 'нан 3 кг')}</i>`);
+    return askConfirm(chatId, r, types, L(u, 'Распознано по фото (ИИ)', 'Фото бойынша танылды (ЖИ)'), savePhoto(dataUrl), u);
+  }
+  async function onText(chatId, u, text) {
+    const types = orgTypes(u.org_id);
+    const r = await AI.parse(text, types);
+    if (!r.items.length) return send(chatId, `${L(u, 'Не нашёл вид отхода и вес. Попробуйте так', 'Қалдық түрі мен салмағы табылмады. Былай жазып көріңіз')}: <i>${L(u, 'очистки овощей 15 кг', 'картоп 15 кг')}</i> ${L(u, 'или пришлите фото', 'немесе фото жіберіңіз')}.\n\n${L(u, 'Виды вашей организации', 'Ұйымыңыздың қалдық түрлері')}:\n${types.map((t) => '• ' + h(t.name)).join('\n')}`);
+    return askConfirm(chatId, r, types, `${L(u, 'Распознано', 'Танылды')}${r.source === 'ai' ? L(u, ' (ИИ)', ' (ЖИ)') : ''}`, null, u);
+  }
+  function saveItems(u, items, photo) {
     const date = A.today(); let ok = 0; const errors = []; let rep;
     for (const x of items) {
       const v = validateEntry(u, { date, qty: x.qty, waste_type_id: x.waste_type_id, method_id: x.method_id });
       if (typeof v === 'string') { errors.push(`${x.name}: ${v}`); continue; }
       rep = getOrCreateReport(u.org_id, date.slice(0, 7));
       if (!EDITABLE.includes(rep.status)) { errors.push(`Отчёт за месяц в статусе «${STATUS_RU[rep.status]}» — запись заблокирована`); break; }
-      db.prepare("INSERT INTO entries (report_id, date, waste_type_id, qty, method_id, user_id, created_at, source) VALUES (?,?,?,?,?,?,?,'telegram')")
-        .run(rep.id, date, v.w.id, v.qty, x.method_id, u.id, nowIso());
+      db.prepare("INSERT INTO entries (report_id, date, waste_type_id, qty, method_id, user_id, created_at, source, product_id, photo) VALUES (?,?,?,?,?,?,?,'telegram',?,?)")
+        .run(rep.id, date, v.w.id, v.qty, x.method_id, u.id, nowIso(), x.product_id || null, photo || null);
       ok++;
     }
     return { ok, errors, rep };
@@ -109,10 +146,10 @@ ${full.totals.byType.slice(0, 6).map((t) => `• ${h(t.name)} — ${fmt(t.qty)} 
       const p = pending.get(String(chatId));
       if (!p || p.key !== key) return answer('Эта запись уже обработана');
       pending.delete(String(chatId));
-      if (act === 'cancel') { answer('Отменено'); return done('✖ Отменено'); }
-      const r = saveItems(u, p.items);
-      answer(r.ok ? `Сохранено: ${r.ok}` : 'Не сохранено');
-      await done(`${r.ok ? `✅ Сохранено записей: ${r.ok}` : '⚠️ Ничего не сохранено'}\n${p.items.map((x) => `• ${h(x.name)} — ${fmt(x.qty)} ${x.unit}`).join('\n')}${r.errors.length ? '\n\n' + r.errors.map(h).join('\n') : ''}`);
+      if (act === 'cancel') { answer(L(u, 'Отменено', 'Болдырылмады')); return done(`✖ ${L(u, 'Отменено', 'Болдырылмады')}`); }
+      const r = saveItems(u, p.items, p.photo);
+      answer(r.ok ? `${L(u, 'Сохранено', 'Сақталды')}: ${r.ok}` : L(u, 'Не сохранено', 'Сақталмады'));
+      await done(`${r.ok ? `✅ ${L(u, 'Сохранено записей', 'Сақталған жазбалар')}: ${r.ok}` : `⚠️ ${L(u, 'Ничего не сохранено', 'Ештеңе сақталмады')}`}\n${p.items.map((x) => itemLine(x, u)).join('\n')}${r.errors.length ? '\n\n' + r.errors.map(h).join('\n') : ''}`);
       if (r.ok) send(chatId, totalsText(u));
       return;
     }
@@ -184,7 +221,12 @@ ${top || 'нет данных'}${orgs}`;
     if (/^\/start/.test(text)) return onStart(chatId, text.split(/\s+/)[1], m.from);
     const u = userByChat(chatId);
     if (!u) return onStart(chatId, null, m.from);
-    if (/^\/help/.test(text)) return send(chatId, u.role === 'resp' ? HELP : HELP_STAFF);
+    if (/^\/help/.test(text)) return send(chatId, u.role === 'resp' ? help(u) : HELP_STAFF);
+    if (/^\/lang|^\/тіл|^\/язык/i.test(text)) {
+      const lang = KZ(u) ? 'ru' : 'kz';
+      db.prepare('UPDATE users SET lang=? WHERE id=?').run(lang, u.id);
+      return send(chatId, lang === 'kz' ? '🇰🇿 Тіл: қазақша. Қайта ауыстыру — /lang' : '🇷🇺 Язык: русский. Сменить снова — /lang');
+    }
     if (/^\/app/.test(text)) {
       if (!state.webAppUrl) return send(chatId, 'Приложение доступно, когда сервер открыт по HTTPS (туннель). Сейчас пользуйтесь командами бота.');
       return send(chatId, '📱 Wasteless внутри Telegram — вход без пароля:', { reply_markup: { inline_keyboard: [[{ text: 'Открыть Wasteless', web_app: { url: state.webAppUrl + '/app?tg=1' } }]] } });
@@ -194,9 +236,11 @@ ${top || 'нет данных'}${orgs}`;
     if (/^\/report|^\/отч[её]т/i.test(text)) return onReport(chatId, u).catch((e) => send(chatId, 'Не удалось сформировать отчёт: ' + h(e.message)));
     if (u.role !== 'resp') return send(chatId, HELP_STAFF);
     if (/^\/itogi|^\/итоги/i.test(text)) return send(chatId, totalsText(u));
+    if (/^\/plan|^\/план|^\/жоспар/i.test(text)) return onPlan(chatId, u);
     if (/^\/send|^\/отправить/i.test(text)) return onSubmitCmd(chatId, u);
     if (m.voice) return send(chatId, '🎙 Голосовые пока не распознаю — нажмите микрофон на клавиатуре телефона (диктовка), и текст придёт мне.');
-    if (!text) return send(chatId, HELP);
+    if (m.photo?.length) return onPhoto(chatId, u, m).catch((e) => send(chatId, 'Не удалось обработать фото: ' + h(e.message)));
+    if (!text) return send(chatId, help(u));
     return onText(chatId, u, text);
   }
 
@@ -210,6 +254,33 @@ ${top || 'нет данных'}${orgs}`;
     if (!msg) return;
     for (const u of db.prepare("SELECT tg_chat_id FROM users WHERE org_id=? AND role='resp' AND tg_chat_id IS NOT NULL AND active=1").all(rep.org_id)) send(u.tg_chat_id, msg);
   }
+  // ---------- прогноз «сколько готовить» ----------
+  const FC = require('./forecast');
+  function planText(u, date) {
+    const f = FC.forecast(u.org_id, date);
+    if (f.closed || !f.items.length) return null;
+    const nm = (x) => h(KZ(u) && x.name_kz ? x.name_kz : x.name);
+    const lines = f.items.map((x) => `• ${nm(x)} — <b>${fmt(x.rec_kg, 1)} кг</b>${x.save_kg >= 0.5 ? ` <i>(${L(u, 'обычно', 'әдетте')} ${fmt(x.usual_kg, 1)}, −${fmt(x.save_kg, 1)})</i>` : ''}`).join('\n');
+    return `🍳 <b>${L(u, 'Сколько готовить', 'Қанша дайындау керек')}: ${f.weekday} ${date.split('-').reverse().join('.')}</b>\n${lines}\n\n`
+      + (f.totals.save_kg >= 1 ? `${L(u, 'Если готовить по плану', 'Жоспар бойынша дайындасаңыз')}: −${fmt(f.totals.save_kg, 1)} ${L(u, 'кг отходов', 'кг қалдық')}, ≈ ${fmt(f.totals.save_kzt, 0)} ₸, −${fmt(f.totals.save_co2, 1)} кг CO₂\n` : '')
+      + `<i>${L(u, `Спрос по этому дню недели за ${f.weeks} нед. + запас ${f.safetyPct}%`, `Соңғы ${f.weeks} аптадағы осы күнгі сұраныс + ${f.safetyPct}% қор`)}</i>`;
+  }
+  function onPlan(chatId, u) {
+    let d = FC.addDays(A.today(), 1);
+    for (let k = 0; k < 7; k++, d = FC.addDays(d, 1)) { const t = planText(u, d); if (t) return send(chatId, t); }
+    return send(chatId, L(u, 'Пока нет истории производства. Вносите в приложении «Итог дня: приготовлено / осталось» — через 2 недели появится прогноз.', 'Өндіріс тарихы әзірге жоқ. Қосымшада «Күн қорытындысы: дайындалды / қалды» енгізіңіз — 2 аптадан кейін болжам пайда болады.'));
+  }
+  // утром в 7:00 по Алматы — план на сегодня тем, у кого есть история производства
+  const planned = new Set();
+  setInterval(() => {
+    const now = new Date(Date.now() + 5 * 3600e3); const day = now.toISOString().slice(0, 10);
+    if (now.getUTCHours() !== 7) return;
+    for (const u of db.prepare("SELECT * FROM users WHERE role='resp' AND tg_chat_id IS NOT NULL AND active=1").all()) {
+      const k = `${u.id}|${day}`; if (planned.has(k)) continue; planned.add(k);
+      const t = planText(u, day); if (t) send(u.tg_chat_id, t);
+    }
+  }, 10 * 60 * 1000).unref();
+
   // напоминание в 17:00 по Алматы, если сегодня ещё нет записей (кроме воскресенья)
   const reminded = new Set();
   setInterval(() => {
@@ -228,9 +299,13 @@ ${top || 'нет данных'}${orgs}`;
     try {
       const me = await api('getMe'); state.username = me.username;
       await api('deleteWebhook', {});
-      await api('setMyCommands', { commands: [{ command: 'itogi', description: 'Итоги за день и месяц' }, { command: 'week', description: 'Неделя: итоги и сравнение' },
+      await api('setMyCommands', { commands: [{ command: 'itogi', description: 'Итоги за день и месяц' }, { command: 'plan', description: 'Сколько готовить завтра' }, { command: 'week', description: 'Неделя: итоги и сравнение' },
         { command: 'quarter', description: 'Квартал к прошлому кварталу' }, { command: 'report', description: 'Excel-отчёт в чат' },
-        { command: 'send', description: 'Отправить отчёт на проверку' }, { command: 'app', description: 'Открыть приложение Wasteless' }, { command: 'help', description: 'Подсказка' }] });
+        { command: 'send', description: 'Отправить отчёт на проверку' }, { command: 'app', description: 'Открыть приложение Wasteless' }, { command: 'lang', description: 'Язык: рус / қаз' }, { command: 'help', description: 'Подсказка' }] });
+      // меню команд на казахском — для пользователей с казахским интерфейсом Telegram
+      await api('setMyCommands', { language_code: 'kk', commands: [{ command: 'itogi', description: 'Күн мен ай қорытындысы' }, { command: 'plan', description: 'Ертең қанша дайындау' }, { command: 'week', description: 'Апта қорытындысы' },
+        { command: 'quarter', description: 'Тоқсан' }, { command: 'report', description: 'Excel-есеп чатқа' },
+        { command: 'send', description: 'Есепті тексеруге жіберу' }, { command: 'app', description: 'Wasteless қосымшасын ашу' }, { command: 'lang', description: 'Тіл: рус / қаз' }, { command: 'help', description: 'Көмек' }] }).catch(() => {});
       console.log(`Telegram-бот запущен: @${me.username}`);
     } catch (e) { state.error = e.message; console.error('[tg] не удалось запустить бота:', e.message); return; }
     let offset = 0;

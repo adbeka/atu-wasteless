@@ -122,6 +122,10 @@ function checkPassword(pw, stored) {
 try { db.exec('ALTER TABLE users ADD COLUMN tg_chat_id TEXT'); } catch { /* колонка уже есть */ }
 db.exec('CREATE TABLE IF NOT EXISTS tg_links (code TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), expires_at TEXT NOT NULL)');
 
+try { db.exec("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'ru'"); } catch { /* уже есть */ }
+try { db.exec('ALTER TABLE entries ADD COLUMN client_id TEXT'); } catch { /* уже есть */ }
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_client ON entries(user_id, client_id) WHERE client_id IS NOT NULL');
+
 const nowIso = () => new Date().toISOString();
 
 module.exports = { db, hashPassword, checkPassword, nowIso };

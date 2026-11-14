@@ -22,11 +22,202 @@ const PIE_COLORS = ['#3459a0', '#3459a0', '#7fa0e0', '#b9cbee', '#e0b100', '#f2d
 // ---------- i18n (рус / қаз) ----------
 const I18N = {
   kz: {
-    'Ввод': 'Енгізу', 'Мои отчёты': 'Есептерім', 'Аналитика': 'Талдау', 'Отчёты': 'Есептер', 'Реестр': 'Тізілім', 'Сводный отчёт': 'Жиынтық есеп',
-    'Контроль сдачи': 'Тапсыру бақылауы', 'Администрирование': 'Әкімшілік', 'Выйти': 'Шығу', 'Вид отхода': 'Қалдық түрі', 'Вес / объём': 'Салмағы / көлемі',
-    'Способ утилизации': 'Кәдеге жарату тәсілі', 'Дата': 'Күні', 'Сохранить запись': 'Жазбаны сақтау', 'Отправить на проверку': 'Тексеруге жіберу',
-    'Сегодня': 'Бүгін', 'За месяц': 'Ай бойы', 'Фото': 'Фото', 'Новый вид': 'Жаңа түр', 'Записи': 'Жазбалар', 'Автовыводы': 'Автоқорытындылар',
-    'Вход в систему': 'Жүйеге кіру', 'Войти': 'Кіру', 'Пароль': 'Құпиясөз', 'Регистрация': 'Тіркелу',
+    'Сколько готовить': 'Қанша дайындау керек',
+    'Прогноз спроса по блюдам: тот же день недели за': 'Тағамдар бойынша сұраныс болжамы: соңғы',
+    'нед.': 'апта',
+    'запас': 'қор',
+    'В этот день недели обычно не готовят': 'Аптаның бұл күні әдетте дайындамайды',
+    'Пока недостаточно истории': 'Тарих әлі жеткіліксіз',
+    'Вносите внизу «Итог дня»: сколько приготовили и сколько осталось. Через 2 недели система начнёт подсказывать, сколько готовить, чтобы не выбрасывать.': 'Төменде «Күн қорытындысын» енгізіңіз: қанша дайындалды, қанша қалды. 2 аптадан кейін жүйе тастамау үшін қанша дайындау керектігін ұсынады.',
+    'План на': 'Жоспар:',
+    'Можно готовить на': 'Мына мөлшерге аз дайындауға болады:',
+    'кг меньше — и никто не останется голодным': 'кг — және ешкім аш қалмайды',
+    'Объёмы уже близки к спросу 👍': 'Көлем сұранысқа жақын 👍',
+    'Рекомендуем приготовить': 'Дайындауға ұсынамыз',
+    'обычно': 'әдетте',
+    'Меньше отходов': 'Қалдық азаяды',
+    'за день': 'күніне',
+    'Экономия': 'Үнемдеу',
+    'по ценам справочника': 'анықтамалық бағасымен',
+    'не уйдёт на полигон': 'полигонға бармайды',
+    'Блюдо': 'Тағам',
+    'Обычно готовят': 'Әдетте дайындайды',
+    'Остаётся': 'Қалады',
+    'Рекомендуем': 'Ұсынамыз',
+    'Точность': 'Дәлдік',
+    'Спрос = приготовлено − осталось. Свежие недели весят больше. Если блюдо закончилось раньше времени — укажите остаток 0, прогноз это учтёт.': 'Сұраныс = дайындалды − қалды. Соңғы апталардың салмағы көбірек. Тағам ерте бітсе — қалдықты 0 деп көрсетіңіз.',
+    'За 30 дней': '30 күнде',
+    'приготовлено': 'дайындалды',
+    'осталось': 'қалды',
+    'дн. с данными': 'деректері бар күн',
+    'Итог дня: приготовлено / осталось': 'Күн қорытындысы: дайындалды / қалды',
+    'Вносите в конце смены — по этим цифрам система считает спрос и советует, сколько готовить. Остаток — то, что не продали.': 'Ауысым соңында енгізіңіз — осы сандар бойынша жүйе сұранысты есептеп, қанша дайындауды ұсынады. Қалдық — сатылмаған өнім.',
+    'Добавьте блюда, которые готовите': 'Дайындайтын тағамдарды қосыңыз',
+    'Добавить блюдо': 'Тағам қосу',
+    'Сохранить итог дня': 'Күн қорытындысын сақтау',
+    'Сохранено блюд': 'Сақталған тағамдар',
+    'Эко-калькулятор': 'Эко-калькулятор',
+    'Своя кружка: сколько вы сэкономите': 'Өз кружкаңыз: қанша үнемдейсіз',
+    'Приходите в кофейню со своей кружкой или термосом — получаете скидку, а одноразовый стакан не попадает на полигон.': 'Кофеханаға өз кружкаңызбен не термоспен келіңіз — жеңілдік аласыз, ал бір реттік стақан полигонға түспейді.',
+    'Сколько кофе/чая в день': 'Күніне неше кофе/шай',
+    'Дней в неделю': 'Аптасына неше күн',
+    'дн.': 'күн',
+    'Скидка за свою кружку, ₸': 'Өз кружкаңыз үшін жеңілдік, ₸',
+    'Сколько человек (вы, группа, факультет)': 'Неше адам (сіз, топ, факультет)',
+    'Допущения': 'Болжамдар',
+    'стакан с крышкой': 'қақпағы бар стақан',
+    'углеродный след': 'көміртек ізі',
+    'на стакан по нижней оценке': 'бір стақанға ең төменгі баға бойынша',
+    'по другим исследованиям — до': 'басқа зерттеулер бойынша —',
+    'Учебный год ≈ 36 недель. Многоразовая кружка окупает свой собственный след примерно за 20–40 использований.': 'Оқу жылы ≈ 36 апта. Көп реттік кружка өз ізін шамамен 20–40 қолданыста ақтайды.',
+    'Неделя': 'Апта',
+    'Месяц': 'Ай',
+    'Учебный год': 'Оқу жылы',
+    'чашки в день': 'кесе күніне',
+    'чел.': 'адам',
+    'Стаканов': 'Стақан',
+    'Мусора': 'Қоқыс',
+    'Скидка': 'Жеңілдік',
+    'За учебный год': 'Оқу жылында',
+    'стаканов не окажутся на полигоне': 'стақан полигонға түспейді',
+    'а вы сэкономите': 'ал сіз үнемдейсіз',
+    'Даже если в свою кружку брать только одну чашку из': 'Өз кружкаңызға тек бір кесені алсаңыз да, барлығы',
+    'стаканов и': 'стақан және',
+    'за год': 'жылына',
+    'Это как': 'Бұл автокөлікпен',
+    'км на автомобиле': 'км жүрумен бірдей',
+    'План': 'Жоспар',
+    'Своя кружка': 'Өз кружкам',
+    'Ввод': 'Енгізу',
+    'Мои отчёты': 'Есептерім',
+    'Аналитика': 'Талдау',
+    'Отчёты': 'Есептер',
+    'Реестр': 'Тізілім',
+    'Сводный отчёт': 'Жиынтық есеп',
+    'Контроль сдачи': 'Тапсыру бақылауы',
+    'Администрирование': 'Әкімшілік',
+    'Выйти': 'Шығу',
+    'Моя сводка': 'Менің жиынтығым',
+    'Рейтинг': 'Рейтинг',
+    'Ответственное лицо': 'Жауапты тұлға',
+    'черновик': 'жоба', 'отправлено': 'жіберілді', 'на проверке': 'тексерілуде', 'принято': 'қабылданды', 'возвращено': 'қайтарылды', 'нет отчёта': 'есеп жоқ',
+    'Проверяющий': 'Тексеруші',
+    'Администратор': 'Әкімші',
+    'Руководство': 'Басшылық',
+    'Вход в систему': 'Жүйеге кіру',
+    'Войти': 'Кіру',
+    'Пароль': 'Құпиясөз',
+    'Регистрация': 'Тіркелу',
+    'Сохранить': 'Сақтау',
+    'Отмена': 'Болдырмау',
+    'Закрыть': 'Жабу',
+    'Удалить': 'Жою',
+    'необязательно': 'міндетті емес',
+    'Вид отхода': 'Қалдық түрі',
+    'Вес / объём': 'Салмағы / көлемі',
+    'Способ утилизации': 'Кәдеге жарату тәсілі',
+    'Дата': 'Күні',
+    'Сохранить запись': 'Жазбаны сақтау',
+    'Отправить на проверку': 'Тексеруге жіберу',
+    'Сегодня': 'Бүгін',
+    'За месяц': 'Ай бойы',
+    'Фото': 'Фото',
+    'Новый вид': 'Жаңа түр',
+    'Записи': 'Жазбалар',
+    'Автовыводы': 'Автоқорытындылар',
+    'Продукт': 'Өнім',
+    'напр. хлеб, плов, картофель': 'мыс. нан, палау, картоп',
+    'вид отхода выбран автоматически': 'қалдық түрі автоматты таңдалды',
+    'выберите вид отхода': 'қалдық түрін таңдаңыз',
+    'Нет в справочнике — выберите вид отхода вручную': 'Анықтамалықта жоқ — қалдық түрін қолмен таңдаңыз',
+    'Быстрый ввод фразой': 'Сөйлеммен жылдам енгізу',
+    'что взвесили…': 'не өлшедіңіз…',
+    'Скажите или напишите, например: «отходы из зала 12 кило, масло 3 литра»': 'Айтыңыз немесе жазыңыз, мысалы: «нан 3 кг, картоп 12 кило»',
+    'Распознать по фото: отходы или табло весов': 'Фото бойынша тану: қалдықтар немесе таразы таблосы',
+    'сфотографируйте отходы или табло весов, ИИ определит продукт и вес': 'қалдықты немесе таразы таблосын суретке түсіріңіз, ЖИ өнім мен салмақты анықтайды',
+    'Распознано': 'Танылды',
+    'проверьте и сохраните': 'тексеріп, сақтаңыз',
+    'по справочнику': 'анықтамалық бойынша',
+    'по фото': 'фото бойынша',
+    'вес оценён на глаз — уточните': 'салмақ шамамен бағаланды — нақтылаңыз',
+    'с табло весов': 'таразы таблосынан',
+    'Смотрю на фото…': 'Фотоны қарап жатырмын…',
+    'Не удалось определить отходы на фото': 'Фотода қалдықтарды анықтау мүмкін болмады',
+    'Сохранено записей': 'Сақталған жазбалар',
+    'Весы': 'Таразы',
+    'Отменить редактирование': 'Өңдеуді болдырмау',
+    'Сохранить изменения': 'Өзгерістерді сақтау',
+    'Срок сдачи: до 5': 'Тапсыру мерзімі: 5-ке дейін',
+    'Отчёт за': 'Есеп:',
+    'Нет сети': 'Желі жоқ',
+    'в очереди': 'кезекте',
+    'ввод работает': 'енгізу жұмыс істейді',
+    'Отправка': 'Жіберілуде',
+    'с ошибкой': 'қатемен',
+    'Очередь отправки': 'Жіберу кезегі',
+    'Очередь пуста': 'Кезек бос',
+    'Отправить сейчас': 'Қазір жіберу',
+    'Удалить запись из очереди?': 'Жазбаны кезектен жою керек пе?',
+    'Записи, внесённые без сети. Уйдут на сервер автоматически, когда появится интернет.': 'Желісіз енгізілген жазбалар. Интернет пайда болғанда серверге автоматты жіберіледі.',
+    'Отправлено из очереди': 'Кезектен жіберілді',
+    'Ждут отправки': 'Жіберуді күтуде',
+    'отправится, когда появится сеть': 'желі пайда болғанда жіберіледі',
+    'Нет сети — в очереди': 'Желі жоқ — кезекте',
+    'Нет сети — запись сохранена на телефоне и отправится сама': 'Желі жоқ — жазба телефонда сақталды, өзі жіберіледі',
+    'Нет сети. Можно вносить записи — они сохранятся на телефоне и отправятся автоматически.': 'Желі жоқ. Жазбаларды енгізе беріңіз — олар телефонда сақталып, автоматты жіберіледі.',
+    'Без сети разбор фразы недоступен — внесите через форму ниже, запись встанет в очередь': 'Желісіз сөйлемді талдау қолжетімсіз — төмендегі формамен енгізіңіз, жазба кезекке қойылады',
+    'Распознавание по фото работает только с интернетом. Фото можно прикрепить к записи ниже': 'Фото бойынша тану тек интернетпен жұмыс істейді. Фотоны төмендегі жазбаға тіркеуге болады',
+    'Память телефона заполнена — удалите фото из очереди': 'Телефон жады толы — кезектен фотоларды жойыңыз',
+    'В очереди есть неотправленные записи. Они останутся на телефоне и уйдут после следующего входа. Выйти?': 'Кезекте жіберілмеген жазбалар бар. Олар телефонда қалады және келесі кіруден кейін жіберіледі. Шығу керек пе?',
+    'Рейтинг подразделений': 'Бөлімшелер рейтингі',
+    'Этот месяц': 'Осы ай',
+    'Прошлый месяц': 'Өткен ай',
+    'баллов': 'ұпай',
+    'Цель': 'Мақсат',
+    'цель': 'мақсат',
+    'Цель месяца': 'Айдың мақсаты',
+    'Цель месяца выполнена': 'Айдың мақсаты орындалды',
+    'Цель и рейтинг': 'Мақсат және рейтинг',
+    'Цель сохранена': 'Мақсат сақталды',
+    'Отходов меньше на': 'Қалдық аз:',
+    'Отходов больше на': 'Қалдық көп:',
+    'до цели': 'мақсатқа дейін',
+    'к базе': 'базаға қарағанда',
+    'база': 'база',
+    'кг/день': 'кг/күн',
+    'место из': 'орын, барлығы',
+    'мимо полигона': 'полигонға емес',
+    'Сэкономлено к базе': 'Базаға қарағанда үнемделді',
+    'Мало данных для сравнения с базой': 'Базамен салыстыру үшін дерек аз',
+    'сравнение каждой организации со своей базой': 'әр ұйым өз базасымен салыстырылады',
+    'Как считаются баллы (из 100)': 'Ұпай қалай есептеледі (100-ден)',
+    'снижение кг на активный день к своей базе (3 предыдущих месяца); цель выполнена = 40': 'белсенді күнге шаққандағы кг-ның өз базасына қарағанда азаюы (алдыңғы 3 ай); мақсат орындалса = 40',
+    'доля отходов мимо полигона (компост, корм, переработка, передача) к цели': 'полигонға бармаған қалдық үлесі (компост, жем, қайта өңдеу, беру) мақсатқа қарағанда',
+    'регулярность учёта: дни с записями к ожидаемым': 'есептің жүйелілігі: жазба бар күндер күтілгенге қарағанда',
+    'отчёт за прошлый месяц сдан до 5 числа': 'өткен айдың есебі 5-ке дейін тапсырылды',
+    'Так столовая и кафедра сравниваются честно — по динамике, а не по килограммам.': 'Осылайша асхана мен кафедра әділ салыстырылады — килограммен емес, динамикамен.',
+    'Снизить отходы (кг/день) к базе на, %': 'Қалдықты (кг/күн) базаға қарағанда азайту, %',
+    'Доля мимо полигона, %': 'Полигонға емес үлес, %',
+    'Все ваши данные под рукой: сегодня, неделя, месяц. Отчёт — одной кнопкой.': 'Барлық деректеріңіз қолыңызда: бүгін, апта, ай. Есеп — бір батырмамен.',
+    '7 полных дней': '7 толық күн',
+    'Этот месяц ': 'Осы ай ',
+    'CO₂ за месяц': 'Айдағы CO₂',
+    'Отчёт за месяц': 'Айлық есеп',
+    'срок — до 5 числа': 'мерзімі — 5-ке дейін',
+    'взвеш.': 'өлшеу',
+    'записей': 'жазба',
+    'к прошлой неделе': 'өткен аптаға',
+    'можно': 'мүмкін',
+    'Внести': 'Енгізу',
+    'форма, фраза, весы': 'форма, сөйлем, таразы',
+    'Excel, можно переслать': 'Excel, жіберуге болады',
+    'Отчёт за неделю': 'Апталық есеп',
+    'Статус отчёта': 'Есеп мәртебесі',
+    'история и комментарии': 'тарих және пікірлер',
+    'По дням — 7 полных дней': 'Күндер бойынша — 7 толық күн',
+    'Что больше всего за неделю': 'Аптада ең көбі',
+    'Нет данных за неделю': 'Аптада дерек жоқ',
+    'Мимо полигона за месяц': 'Айда полигонға емес',
   },
 };
 let LANG = localStorage.getItem('lang') || 'ru';
@@ -34,11 +225,66 @@ const T = (s) => (LANG === 'kz' && I18N.kz[s]) || s;
 
 // ---------- API ----------
 async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, { headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', ...opts,
-    body: opts.body && typeof opts.body !== 'string' ? JSON.stringify(opts.body) : opts.body });
+  let res;
+  try {
+    res = await fetch('/api' + path, { headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', ...opts,
+      body: opts.body && typeof opts.body !== 'string' ? JSON.stringify(opts.body) : opts.body });
+  } catch { const e = new Error(T('Нет сети')); e.offline = true; throw e; }
   const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
-  if (!res.ok) { const e = new Error(data?.error || `Ошибка ${res.status}`); e.status = res.status; e.data = data; throw e; }
+  if (!res.ok) { const e = new Error(data?.error || `Ошибка ${res.status}`); e.status = res.status; e.data = data; e.offline = !!data?.offline; throw e; }
   return data;
+}
+
+// ---------- работа без сети: очередь записей на телефоне ----------
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const Q = {
+  key: () => `wl-queue-${S.user?.id || 0}`,
+  all() { try { return JSON.parse(localStorage.getItem(Q.key()) || '[]'); } catch { return []; } },
+  save(list) { try { localStorage.setItem(Q.key(), JSON.stringify(list)); } catch { toast(T('Память телефона заполнена — удалите фото из очереди'), true); } netbar(); },
+  add(body, label) { const list = Q.all(); list.push({ ...body, client_id: body.client_id || uid(), label, queued_at: new Date().toISOString() }); Q.save(list); },
+  remove(cid) { Q.save(Q.all().filter((x) => x.client_id !== cid)); },
+  busy: false,
+  async flush(silent) {
+    if (Q.busy || !S.user || S.user.role !== 'resp' || !navigator.onLine) return;
+    const list = Q.all().filter((x) => !x.error); if (!list.length) return;
+    Q.busy = true; netbar(); let ok = 0;
+    for (const item of list) {
+      const { label, queued_at, error, ...body } = item;
+      try { await api('/entries', { method: 'POST', body: { ...body, force: true } }); Q.remove(item.client_id); ok++; }
+      catch (e) {
+        if (e.offline) break;
+        Q.save(Q.all().map((x) => (x.client_id === item.client_id ? { ...x, error: e.message } : x)));
+      }
+    }
+    Q.busy = false; netbar();
+    if (ok) { toast(`${T('Отправлено из очереди')}: ${ok}`); if (!silent && ['form', 'me'].includes(parseHash().page)) route(); }
+  },
+};
+function netbar() {
+  let el = $('#netbar');
+  const list = S.user ? Q.all() : []; const n = list.length; const bad = list.filter((x) => x.error).length;
+  const off = !navigator.onLine;
+  if (!off && !n) { el?.remove(); return; }
+  if (!el) { el = document.createElement('button'); el.id = 'netbar'; document.body.appendChild(el); el.onclick = queueDialog; }
+  el.className = 'netbar' + (off ? ' off' : '') + (bad ? ' bad' : '');
+  el.textContent = off ? `● ${T('Нет сети')}${n ? ` · ${n} ${T('в очереди')}` : ` · ${T('ввод работает')}`}` : Q.busy ? `↻ ${T('Отправка')}…` : `⏳ ${n} ${T('в очереди')}${bad ? ` · ${bad} ${T('с ошибкой')}` : ''}`;
+}
+function queueDialog() {
+  const list = Q.all();
+  modal(`<h2>${T('Очередь отправки')}</h2>
+    <p class="small muted">${T('Записи, внесённые без сети. Уйдут на сервер автоматически, когда появится интернет.')}</p>
+    ${list.map((x) => `<div class="entry"><div class="t">${esc(x.label || '')}<small>${dmy(x.date)}${x.error ? ` · <span style="color:var(--red)">${esc(x.error)}</span>` : ''}</small></div>
+      <button class="icon-btn" data-qx="${esc(x.client_id)}" title="${T('Удалить')}">✕</button></div>`).join('') || `<p class="muted">${T('Очередь пуста')}</p>`}
+    <div class="row" style="margin-top:12px"><button id="qSend" ${navigator.onLine && list.length ? '' : 'disabled'}>${T('Отправить сейчас')}</button><button class="btn-light" data-close>${T('Закрыть')}</button></div>`, (m, close) => {
+    $$('[data-qx]', m).forEach((b) => b.onclick = () => { if (confirm(T('Удалить запись из очереди?'))) { Q.remove(b.dataset.qx); close(); queueDialog(); } });
+    $('#qSend', m).onclick = async () => { Q.save(Q.all().map(({ error, ...x }) => x)); close(); await Q.flush(); };
+  });
+}
+addEventListener('online', () => { netbar(); Q.flush(); });
+addEventListener('offline', netbar);
+setInterval(() => Q.flush(true), 45000);
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
 function toast(msg, err) {
   $('.toast')?.remove();
@@ -86,15 +332,15 @@ async function loadConclusion(el, qs) {
       <p class="small muted" style="margin-bottom:0">Все числа в заключении посчитаны системой по данным реестра; ИИ не добавляет новых цифр.</p>`;
   } catch (e) { el.innerHTML = `<p class="muted small">${esc(e.message)}</p>`; }
 }
-const chip = (st, label) => `<span class="chip st-${esc(st)}">${esc(label || STATUS_RU[st] || st)}</span>`;
+const chip = (st, label) => `<span class="chip st-${esc(st)}">${esc(T(label || STATUS_RU[st] || st))}</span>`;
 
 // ---------- state & router ----------
 const S = { user: null, charts: [] };
 const NAV = {
-  resp: [['me', 'Моя сводка', '◉'], ['form', 'Ввод', '✎'], ['my-reports', 'Мои отчёты', '☰'], ['dashboard', 'Аналитика', '▤']],
-  reviewer: [['reports', 'Отчёты', '✓'], ['registry', 'Реестр', '☰'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!']],
-  manager: [['dashboard', 'Аналитика', '▤'], ['summary', 'Сводный отчёт', '⇩'], ['registry', 'Реестр', '☰'], ['control', 'Контроль сдачи', '!']],
-  admin: [['admin', 'Администрирование', '⚙'], ['reports', 'Отчёты', '✓'], ['registry', 'Реестр', '☰'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!']],
+  resp: [['me', 'Моя сводка', '◉'], ['form', 'Ввод', '✎'], ['plan', 'План', '🍳'], ['rating', 'Рейтинг', '★'], ['my-reports', 'Мои отчёты', '☰'], ['dashboard', 'Аналитика', '▤'], ['eco', 'Своя кружка', '☕']],
+  reviewer: [['reports', 'Отчёты', '✓'], ['registry', 'Реестр', '☰'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕']],
+  manager: [['dashboard', 'Аналитика', '▤'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['summary', 'Сводный отчёт', '⇩'], ['registry', 'Реестр', '☰'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕']],
+  admin: [['admin', 'Администрирование', '⚙'], ['reports', 'Отчёты', '✓'], ['rating', 'Рейтинг', '★'], ['plan', 'План', '🍳'], ['registry', 'Реестр', '☰'], ['summary', 'Сводный отчёт', '⇩'], ['dashboard', 'Аналитика', '▤'], ['control', 'Контроль сдачи', '!'], ['eco', 'Своя кружка', '☕']],
 };
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, '');
@@ -120,14 +366,20 @@ async function route() {
   }
   if (!S.user) {
     if (r.page === 'register') return renderRegister(r);
+    if (r.page === 'eco') { // эко-калькулятор открыт всем (QR на кассе кофейни), без входа
+      $('#app').innerHTML = `<div class="public-eco"><header class="topbar" style="display:flex"><div class="brand">${LOGO}<div><b>${esc(S.cfg.systemName)}</b></div></div>
+        <a class="btn-ghost-light" href="#/login" style="margin-left:auto;padding:8px 12px;border-radius:10px">${T('Войти')}</a></header><main></main></div>`;
+      pageEco($('main')); return;
+    }
     return renderLogin(r);
   }
+  netbar(); Q.flush(true);
   const nav = NAV[S.user.role];
   if (!r.page || r.page === 'login') return go('/' + nav[0][0]);
   shell(r.page);
   const main = $('main');
   const pages = { me: pageMe, form: pageForm, 'my-reports': pageReports, reports: pageReports, report: pageReport, registry: pageRegistry,
-    summary: pageSummary, dashboard: pageDashboard, control: pageControl, admin: pageAdmin };
+    summary: pageSummary, dashboard: pageDashboard, control: pageControl, admin: pageAdmin, rating: pageRating, plan: pagePlan, eco: pageEco };
   const fn = pages[r.page];
   if (!fn) { main.innerHTML = '<div class="card">Страница не найдена</div>'; return; }
   try { await fn(main, r); animateIn(main); } catch (e) { main.innerHTML = `<div class="alert alert-red">${esc(e.message)}</div>`; if (e.status === 401) { S.user = null; route(); } }
@@ -147,6 +399,9 @@ const ICONS = {
   out: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   spark: '<path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2Z"/>',
 };
+ICONS.trophy = '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>';
+ICONS.chef = '<path d="M6 13.9A4 4 0 1 1 8.4 6a4.5 4.5 0 0 1 7.2 0A4 4 0 1 1 18 13.9V20H6Z"/><path d="M6 17h12"/>';
+ICONS.cup = '<path d="M17 8h1a3 3 0 0 1 0 6h-1"/><path d="M3 8h14v7a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5Z"/><path d="M7 2v3M11 2v3M15 2v3"/>';
 ICONS.arrow = '<path d="M5 12h14M13 6l6 6-6 6"/>';
 const icon = (n) => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ''}</svg>`;
 
@@ -193,7 +448,7 @@ function animateLogin() {
   });
 }
 const LOGO = `<div class="logo"><svg viewBox="0 0 24 24">${ICONS.leaf}</svg></div>`;
-const NAV_ICON = { me: 'leaf', form: 'edit', 'my-reports': 'list', dashboard: 'chart', reports: 'check', registry: 'db', summary: 'file', control: 'alert', admin: 'gear' };
+const NAV_ICON = { plan: 'chef', eco: 'cup', rating: 'trophy', me: 'leaf', form: 'edit', 'my-reports': 'list', dashboard: 'chart', reports: 'check', registry: 'db', summary: 'file', control: 'alert', admin: 'gear' };
 const initials = (n) => String(n).split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 function shell(page) {
@@ -208,7 +463,7 @@ function shell(page) {
       <div class="nav-group">${S.user.role === 'resp' ? esc(S.user.org_short || '') : esc(S.cfg.industryLabel)}</div>
       <nav class="side-nav">${navHtml}</nav>
       <div class="side-foot">
-        <div class="me"><div class="avatar">${esc(initials(S.user.full_name))}</div><div><b>${esc(S.user.full_name)}</b><small>${esc(ROLE_RU[S.user.role])}</small></div></div>
+        <div class="me"><div class="avatar">${esc(initials(S.user.full_name))}</div><div><b>${esc(S.user.full_name)}</b><small>${esc(T(ROLE_RU[S.user.role]))}</small></div></div>
         <div class="side-actions">${lang(false)}<button class="btn-ghost-light" data-logout>${icon('out')}${T('Выйти')}</button></div>
       </div>
     </aside>
@@ -219,8 +474,13 @@ function shell(page) {
     </div>
   </div>
   <nav class="bottom-nav">${links.slice(0, 5).map((l) => `<a href="#/${l.k}" class="${l.active ? 'active' : ''}">${icon(NAV_ICON[l.k])}${esc(l.label.split(' ')[0])}</a>`).join('')}</nav>`;
-  $$('[data-logout]').forEach((b) => b.onclick = async () => { await api('/logout', { method: 'POST' }); S.user = null; go('/login'); route(); });
-  $$('[data-lang]').forEach((b) => b.onclick = () => { LANG = b.dataset.lang; localStorage.setItem('lang', LANG); route(); });
+  $$('[data-logout]').forEach((b) => b.onclick = async () => {
+    if (Q.all().length && !confirm(T('В очереди есть неотправленные записи. Они останутся на телефоне и уйдут после следующего входа. Выйти?'))) return;
+    try { await api('/logout', { method: 'POST' }); } catch {}
+    try { (await caches.keys()).forEach((k) => caches.delete(k)); } catch {}
+    S.user = null; netbar(); go('/login'); route();
+  });
+  $$('[data-lang]').forEach((b) => b.onclick = () => { LANG = b.dataset.lang; localStorage.setItem('lang', LANG); api('/me/lang', { method: 'PUT', body: { lang: LANG } }).catch(() => {}); route(); });
 }
 
 // ---------- login / register ----------
@@ -321,37 +581,48 @@ async function renderRegister(r) {
 
 // ---------- ФОРМА ВВОДА (ответственное лицо) ----------
 async function pageForm(main) {
-  const [types, methods] = await Promise.all([api('/waste-types'), api('/methods')]);
+  const [types, methods, prodRes] = await Promise.all([api('/waste-types'), api('/methods'), api('/products').catch(() => ({ products: [] }))]);
+  const products = prodRes.products;
+  const prodName = (p) => (LANG === 'kz' && p.name_kz) || p.name;
   const activeMethods = methods.filter((m) => m.active);
   const DKEY = `draft-entry-${S.user.id}`;
   let draft = {}; try { draft = JSON.parse(localStorage.getItem(DKEY) || '{}'); } catch {}
-  const st = { date: draft.date && draft.date <= todayIso() ? draft.date : todayIso(), typeId: draft.typeId || null, qty: draft.qty || '', methodId: draft.methodId || null, photo: null, editId: null };
-  let report = await api('/my-report?period=' + st.date.slice(0, 7));
+  const st = { date: draft.date && draft.date <= todayIso() ? draft.date : todayIso(), typeId: draft.typeId || null, qty: draft.qty || '', methodId: draft.methodId || null, photo: null, editId: null, productId: draft.productId || null };
+  let report;
+  try { report = await api('/my-report?period=' + st.date.slice(0, 7)); }
+  catch (e) { if (!e.offline) throw e; report = { id: 0, period: st.date.slice(0, 7), status: 'draft', status_ru: 'черновик', editable: true, entries: [], totals: { kg: 0, byType: [] }, history: [], offline: true }; }
 
   main.innerHTML = `<div class="form-wrap">
-    <div class="page-head"><div><h1>${esc(S.user.org_name)}</h1><div class="muted small">Ответственное лицо: ${esc(S.user.full_name)}</div></div></div>
+    <div class="page-head"><div><h1>${esc(S.user.org_name)}</h1><div class="muted small">${T('Ответственное лицо')}: ${esc(S.user.full_name)}</div></div></div>
     <div id="status"></div>
     <div class="card quick" id="quickCard">
-      <h3 style="margin-bottom:6px">⚡ Быстрый ввод фразой</h3>
-      <div class="small muted" style="margin-bottom:8px">Скажите или напишите, например: «отходы из зала 12 кило, масло 3 литра»</div>
-      <div class="qty-row"><input id="phrase" placeholder="что взвесили…" autocomplete="off" style="font-size:16px;font-weight:400;text-align:left">
-        <button type="button" class="btn-light" id="mic" title="Голосовой ввод" style="min-width:52px">🎙</button><button type="button" id="parse">→</button></div>
+      <h3 style="margin-bottom:6px">⚡ ${T('Быстрый ввод фразой')}</h3>
+      <div class="small muted" style="margin-bottom:8px">${T('Скажите или напишите, например: «отходы из зала 12 кило, масло 3 литра»')}</div>
+      <div class="qty-row"><input id="phrase" placeholder="${T('что взвесили…')}" autocomplete="off" style="font-size:16px;font-weight:400;text-align:left">
+        <button type="button" class="btn-light" id="mic" title="Голосовой ввод" style="min-width:52px">🎙</button>
+        <label class="btn btn-light" id="snapBtn" title="${T('Распознать по фото: отходы или табло весов')}" style="min-width:52px;margin:0;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)">📷<input type="file" id="snap" accept="image/*" capture="environment" hidden></label>
+        <button type="button" id="parse">→</button></div>
+      <div class="small muted" style="margin-top:6px">📷 — ${T('сфотографируйте отходы или табло весов, ИИ определит продукт и вес')}</div>
       <div id="preview" class="preview"></div>
     </div>
     <div class="card" id="entryCard">
       <div class="row" style="margin-bottom:12px">
         <div class="field"><label>${T('Дата')}</label><input type="date" id="date" min="${minDate()}" max="${todayIso()}" value="${st.date}"></div>
       </div>
+      <div class="field"><label>${T('Продукт')} <span class="muted small">(${T('необязательно')})</span></label>
+        <input id="product" list="prodList" autocomplete="off" placeholder="${T('напр. хлеб, плов, картофель')}">
+        <datalist id="prodList">${products.map((p) => `<option value="${esc(prodName(p))}">`).join('')}</datalist>
+        <div class="small muted" id="prodHint"></div></div>
       <label>${T('Вид отхода')}</label>
       <div class="types" id="types"></div>
       <div class="field"><label>${T('Вес / объём')}</label>
         <div class="qty-row"><input id="qty" inputmode="decimal" autocomplete="off" placeholder="0,0" value="${esc(st.qty)}"><div class="unit" id="unit">кг</div></div></div>
       <div id="recHint"></div>
       <div class="field"><label>${T('Способ утилизации')}</label><select id="method">${activeMethods.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></div>
-      <div class="field photo-btn"><label class="btn btn-light btn-sm" style="margin:0;color:var(--ink)">📷 ${T('Фото')}<input type="file" id="photo" accept="image/*" capture="environment" hidden></label><span id="photoPrev" class="small muted">необязательно</span></div>
+      <div class="field photo-btn"><label class="btn btn-light btn-sm" style="margin:0;color:var(--ink)">📷 ${T('Фото')}<input type="file" id="photo" accept="image/*" capture="environment" hidden></label><span id="photoPrev" class="small muted">${T('необязательно')}</span></div>
       <div style="display:flex;gap:8px"><button class="btn-lg" id="save" style="flex:1">${T('Сохранить запись')}</button>
-        <button class="btn-lg btn-sec" id="scale" type="button" style="width:auto" title="Получить вес с электронных весов">⚖ Весы</button></div>
-      <button class="btn-lg btn-light hidden" id="cancelEdit" style="margin-top:8px">Отменить редактирование</button>
+        <button class="btn-lg btn-sec" id="scale" type="button" style="width:auto" title="Получить вес с электронных весов">⚖ ${T('Весы')}</button></div>
+      <button class="btn-lg btn-light hidden" id="cancelEdit" style="margin-top:8px">${T('Отменить редактирование')}</button>
       <div class="saved-hint" id="hint"></div>
     </div>
     <div class="card"><div class="totals" id="totals"></div></div>
@@ -360,8 +631,15 @@ async function pageForm(main) {
     <div class="card" id="histCard"></div>
   </div>`;
 
-  const saveDraft = () => { localStorage.setItem(DKEY, JSON.stringify({ date: st.date, typeId: st.typeId, qty: st.qty, methodId: st.methodId })); $('#hint').textContent = st.qty || st.typeId ? 'Черновик сохранён автоматически' : ''; };
+  const saveDraft = () => { localStorage.setItem(DKEY, JSON.stringify({ date: st.date, typeId: st.typeId, qty: st.qty, methodId: st.methodId, productId: st.productId })); $('#hint').textContent = st.qty || st.typeId ? 'Черновик сохранён автоматически' : ''; };
   const typeById = (id) => types.find((t) => t.id === +id);
+  const prodById = (id) => products.find((p) => p.id === +id);
+  function setProduct(p) {
+    st.productId = p ? p.id : null;
+    $('#product').value = p ? prodName(p) : '';
+    $('#prodHint').innerHTML = p ? `${p.price_kzt_kg ? `≈ ${fmt(p.price_kzt_kg, 0)} ₸/кг · ` : ''}${p.type_id ? T('вид отхода выбран автоматически') : T('выберите вид отхода')}` : '';
+    if (p?.type_id && typeById(p.type_id)) selectType(p.type_id); else saveDraft();
+  }
 
   function renderTypes() {
     $('#types').innerHTML = types.map((t) => `<button type="button" class="type-btn ${st.typeId === t.id ? 'sel' : ''}" data-t="${t.id}">${catIcon(t.category)}<span class="nm">${esc(t.name)}</span><small>${t.unit}</small></button>`).join('')
@@ -408,8 +686,8 @@ async function pageForm(main) {
     const dl = new Date(+report.period.slice(0, 4), +report.period.slice(5, 7), 5);
     const daysLeft = Math.ceil((dl - new Date()) / 864e5);
     let s = `<div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
-      <div>Отчёт за <b>${monthName(report.period)}</b> ${chip(report.status, report.status_ru)}
-      <div class="small muted">Срок сдачи: до 5 ${MONTHS_GEN[dl.getMonth()]} ${daysLeft >= 0 ? `(осталось ${daysLeft} дн.)` : ''}</div></div>
+      <div>${T('Отчёт за')} <b>${LANG === 'kz' ? report.period.split('-').reverse().join('.') : monthName(report.period)}</b> ${chip(report.status, report.status_ru)}
+      <div class="small muted">${LANG === 'kz' ? `Тапсыру мерзімі: 05.${String(dl.getMonth() + 1).padStart(2, "0")}.${dl.getFullYear()} дейін ${daysLeft >= 0 ? `(${daysLeft} күн қалды)` : ''}` : `Срок сдачи: до 5 ${MONTHS_GEN[dl.getMonth()]} ${daysLeft >= 0 ? `(осталось ${daysLeft} дн.)` : ''}`}</div></div>
       ${ed ? `<button id="submit" class="btn-sec" ${report.entries.length ? '' : 'disabled'}>${T('Отправить на проверку')}</button>` : ''}</div>`;
     if (report.status === 'returned') s = `<div class="alert alert-red"><b>Отчёт возвращён на доработку.</b> Комментарий проверяющего: «${esc(report.last_comment)}». Исправьте записи и отправьте повторно.</div>` + s;
     if (['submitted', 'in_review'].includes(report.status)) s = `<div class="alert alert-blue">Отчёт ${report.status === 'submitted' ? 'отправлен' : 'на проверке'} — редактирование заблокировано до решения проверяющего.</div>` + s;
@@ -433,12 +711,16 @@ async function pageForm(main) {
       <div class="tot-box"><div class="small muted">${T('За месяц')} · ${MONTHS[+report.period.slice(5, 7) - 1]}</div><div class="big">${fmt(report.totals.kg)} кг</div>
         <ul>${report.totals.byType.map((t) => `<li><span>${esc(t.name)}</span><b class="nowrap">${fmt(t.qty, 2)} ${t.unit}</b></li>`).join('') || '<li class="muted">нет записей</li>'}</ul></div>`;
     $('#cnt').textContent = `${report.entries.length} записей`;
+    const queued = Q.all().filter((x) => x.date?.slice(0, 7) === report.period);
     const byDate = {}; report.entries.forEach((e) => (byDate[e.date] ??= []).push(e));
     $('#list').innerHTML = Object.entries(byDate).slice(0, 12).map(([d, es]) => `<div class="small muted" style="margin-top:10px"><b>${dmy(d)}</b> · ${fmt(es.reduce((a, e) => a + e.kg, 0))} кг</div>` +
-      es.map((e) => `<div class="entry"><div class="t">${esc(e.type_name)}<small>${esc(e.method_name)}${e.photo ? ' · 📷' : ''}${SRC_ICON[e.source] || ''}</small></div><div class="q">${fmt(e.qty, 2)} ${e.unit}</div>
+      es.map((e) => `<div class="entry"><div class="t">${e.product_name ? `<b>${esc(e.product_name)}</b> → ` : ''}${esc(e.type_name)}<small>${esc(e.method_name)}${e.photo ? ' · 📷' : ''}${SRC_ICON[e.source] || ''}</small></div><div class="q">${fmt(e.qty, 2)} ${e.unit}</div>
         ${ed ? `<button class="icon-btn" data-edit="${e.id}" title="Изменить">✎</button><button class="icon-btn" data-del="${e.id}" title="Удалить">✕</button>` : ''}</div>`).join('')).join('')
       + (Object.keys(byDate).length > 12 ? `<p class="small muted">… и ещё ${Object.keys(byDate).length - 12} дн. — <a href="#/report/${report.id}">открыть отчёт полностью</a></p>` : '')
-      || '<p class="muted">Пока нет записей за этот месяц.</p>';
+      || (queued.length ? '' : '<p class="muted">Пока нет записей за этот месяц.</p>');
+    if (queued.length) $('#list').insertAdjacentHTML('afterbegin', `<div class="small muted" style="margin-top:6px"><b>⏳ ${T('Ждут отправки')}</b> · ${queued.length}</div>` +
+      queued.map((x) => `<div class="entry queued"><div class="t">${esc(x.label)}<small>${dmy(x.date)}${x.error ? ` · <span style="color:var(--red)">${esc(x.error)}</span>` : ` · ${T('отправится, когда появится сеть')}`}</small></div></div>`).join(''));
+    if (report.offline) $('#status').innerHTML = `<div class="alert alert-amber">${T('Нет сети. Можно вносить записи — они сохранятся на телефоне и отправятся автоматически.')}</div>`;
     $$('[data-del]').forEach((b) => b.onclick = async () => {
       if (!confirm('Удалить запись?')) return;
       try { report = (await api('/entries/' + b.dataset.del, { method: 'DELETE' })).report; renderAll(); } catch (e) { toast(e.message, true); }
@@ -459,7 +741,10 @@ async function pageForm(main) {
     if (e.target.value > todayIso()) { e.target.value = todayIso(); toast('Дата не может быть в будущем', true); }
     if (e.target.value < minDate()) { e.target.value = minDate(); toast('Можно вносить записи не старше 12 месяцев', true); }
     st.date = e.target.value; saveDraft();
-    if (st.date.slice(0, 7) !== report.period) report = await api('/my-report?period=' + st.date.slice(0, 7));
+    if (st.date.slice(0, 7) !== report.period) {
+      try { report = await api('/my-report?period=' + st.date.slice(0, 7)); }
+      catch (err) { if (!err.offline) return toast(err.message, true); report = { ...report, id: 0, period: st.date.slice(0, 7), entries: [], totals: { kg: 0, byType: [] }, history: [], offline: true }; }
+    }
     renderReport();
   };
   $('#qty').oninput = (e) => { st.qty = e.target.value.replace(/[^\d.,]/g, ''); e.target.value = st.qty; saveDraft(); };
@@ -474,14 +759,22 @@ async function pageForm(main) {
     const qty = parseFloat(String(st.qty).replace(',', '.'));
     if (!st.typeId) return toast('Выберите вид отхода', true);
     if (!(qty > 0)) { $('#qty').focus(); return toast('Введите вес/объём больше 0', true); }
-    const body = { date: st.date, waste_type_id: st.typeId, qty, method_id: +$('#method').value, photo: st.photo };
+    const body = { date: st.date, waste_type_id: st.typeId, product_id: st.productId, qty, method_id: +$('#method').value, photo: st.photo };
+    const afterSave = () => {
+      resetEdit(); st.qty = ''; st.photo = null; $('#qty').value = ''; $('#photo').value = ''; $('#photoPrev').textContent = T('необязательно');
+      setProduct(null); localStorage.removeItem(DKEY); $('#hint').textContent = ''; renderAll();
+    };
     const send = async (force) => {
       try {
         const r = st.editId ? await api('/entries/' + st.editId, { method: 'PUT', body }) : await api('/entries', { method: 'POST', body: { ...body, force } });
         report = r.report; buzz(); toast(st.editId ? 'Запись изменена' : `Сохранено: ${typeById(st.typeId)?.name} — ${fmt(qty, 2)} ${typeById(st.typeId)?.unit}`);
-        resetEdit(); st.qty = ''; st.photo = null; $('#qty').value = ''; $('#photo').value = ''; $('#photoPrev').textContent = 'необязательно';
-        localStorage.removeItem(DKEY); $('#hint').textContent = ''; renderAll();
+        afterSave();
       } catch (e) {
+        if (e.offline && !st.editId) {
+          const t = typeById(st.typeId); const p = prodById(st.productId);
+          Q.add({ ...body, source: 'offline' }, `${p ? prodName(p) + ' → ' : ''}${t?.name} — ${fmt(qty, 2)} ${t?.unit}`);
+          buzz(); toast(T('Нет сети — запись сохранена на телефоне и отправится сама')); afterSave(); return;
+        }
         if (e.status === 409 && e.data?.duplicate) { if (confirm(e.message)) return send(true); return; }
         toast(e.message, true);
       }
@@ -489,29 +782,34 @@ async function pageForm(main) {
     send(false);
   };
   // ---- быстрый ввод фразой / голосом (ИИ разбирает фразу в записи, человек подтверждает)
-  let parsed = [];
-  const renderPreview = (src, unknown = []) => {
-    $('#preview').innerHTML = parsed.length ? `<div class="small muted" style="margin:10px 0 4px">Распознано ${src === 'ai' ? '<span class="chip st-accepted">ИИ · Claude</span>' : '<span class="chip st-draft">по ключевым словам</span>'} — проверьте и сохраните:</div>
-      ${parsed.map((p, i) => `<div class="entry"><div class="t">${esc(p.name)}<small>${esc(p.fragment || '')}</small></div>
+  let parsed = []; let parsedPhoto = null;
+  const renderPreview = (src, unknown = [], note = '') => {
+    const badge = src === 'photo' ? `<span class="chip st-accepted">📷 ${T('по фото')} · Claude</span>` : src === 'ai' ? '<span class="chip st-accepted">ИИ · Claude</span>' : `<span class="chip st-draft">${T('по справочнику')}</span>`;
+    $('#preview').innerHTML = parsed.length ? `<div class="small muted" style="margin:10px 0 4px">${T('Распознано')} ${badge} — ${T('проверьте и сохраните')}:</div>
+      ${parsed.map((p, i) => `<div class="entry"><div class="t">${p.product ? `<b>${esc(p.product)}</b> → ` : ''}${esc(p.name)}<small>${esc(p.fragment || '')}${p.qty_source === 'estimate' ? ` · <span style="color:var(--amber)">${T('вес оценён на глаз — уточните')}</span>` : p.qty_source === 'scale' ? ` · ⚖ ${T('с табло весов')}` : ''}</small></div>
         <input data-pq="${i}" value="${p.qty}" inputmode="decimal" style="width:80px;text-align:right"><span class="small">${p.unit}</span><button class="icon-btn" data-px="${i}">✕</button></div>`).join('')}
       ${unknown.length ? `<div class="small" style="color:var(--amber)">Не найдено в справочнике: ${unknown.map(esc).join(', ')} — добавьте через «＋ Новый вид»</div>` : ''}
+      ${note ? `<div class="small muted" style="margin-top:6px">💬 ${esc(note)}</div>` : ''}
       <button class="btn-lg" id="saveAll" style="margin-top:10px">Сохранить ${parsed.length} ${parsed.length === 1 ? 'запись' : 'записи'}</button>`
       : `<div class="small" style="color:var(--amber);margin-top:8px">Не удалось распознать вид и вес — попробуйте «очистки овощей 15 кг».</div>`;
     $$('[data-pq]').forEach((x) => x.oninput = () => { parsed[+x.dataset.pq].qty = parseFloat(x.value.replace(',', '.')); });
-    $$('[data-px]').forEach((x) => x.onclick = () => { parsed.splice(+x.dataset.px, 1); renderPreview(src, unknown); });
+    $$('[data-px]').forEach((x) => x.onclick = () => { parsed.splice(+x.dataset.px, 1); renderPreview(src, unknown, note); });
     if ($('#saveAll')) $('#saveAll').onclick = async () => {
-      let ok = 0;
+      let ok = 0, queued = 0;
       for (const p of parsed) {
-        try { const r = await api('/entries', { method: 'POST', body: { date: st.date, waste_type_id: p.waste_type_id, qty: p.qty, method_id: p.method_id, source: 'voice', force: true } }); report = r.report; ok++; }
-        catch (e) { toast(`${p.name}: ${e.message}`, true); }
+        const body = { date: st.date, waste_type_id: p.waste_type_id, product_id: p.product_id || null, qty: p.qty, method_id: p.method_id, source: src === 'photo' ? 'photo' : 'voice', photo_ref: parsedPhoto, client_id: uid() };
+        try { const r = await api('/entries', { method: 'POST', body: { ...body, force: true } }); report = r.report; ok++; }
+        catch (e) { if (e.offline) { Q.add(body, `${p.product ? p.product + ' → ' : ''}${p.name} — ${fmt(p.qty, 2)} ${p.unit}`); queued++; } else toast(`${p.name}: ${e.message}`, true); }
       }
-      if (ok) { toast(`Сохранено записей: ${ok}`); parsed = []; $('#phrase').value = ''; $('#preview').innerHTML = ''; renderAll(); }
+      if (queued) toast(`${T('Нет сети — в очереди')}: ${queued}`);
+      if (ok || queued) { if (ok) toast(`${T('Сохранено записей')}: ${ok}`); parsed = []; parsedPhoto = null; $('#phrase').value = ''; $('#preview').innerHTML = ''; renderAll(); }
     };
   };
   const doParse = async () => {
     const text = $('#phrase').value.trim(); if (!text) return $('#phrase').focus();
     $('#parse').disabled = true; $('#parse').textContent = '…';
-    try { const r = await api('/ai/parse', { method: 'POST', body: { text } }); parsed = r.items; renderPreview(r.source, r.unknown); }
+    if (!navigator.onLine) { $('#parse').disabled = false; $('#parse').textContent = '→'; return toast(T('Без сети разбор фразы недоступен — внесите через форму ниже, запись встанет в очередь'), true); }
+    try { const r = await api('/ai/parse', { method: 'POST', body: { text } }); parsed = r.items; parsedPhoto = null; renderPreview(r.source, r.unknown); }
     catch (e) { toast(e.message, true); }
     finally { $('#parse').disabled = false; $('#parse').textContent = '→'; }
   };
@@ -526,6 +824,28 @@ async function pageForm(main) {
     rec.onresult = (e) => { $('#phrase').value = e.results[0][0].transcript; doParse(); };
     rec.start();
   };
+  $('#product').onchange = () => {
+    const v = $('#product').value.trim().toLowerCase();
+    const p = products.find((x) => [x.name, x.name_kz].filter(Boolean).some((n) => n.toLowerCase() === v))
+      || (v.length >= 3 && products.find((x) => [x.name, x.name_kz, ...String(x.synonyms).split(',')].filter(Boolean).some((n) => n.toLowerCase().startsWith(v))));
+    if (v && !p) { st.productId = null; $('#prodHint').textContent = T('Нет в справочнике — выберите вид отхода вручную'); saveDraft(); return; }
+    setProduct(p || null);
+  };
+  // ---- распознавание по фото (Claude смотрит на отходы или на табло весов)
+  $('#snap').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!navigator.onLine) { e.target.value = ''; return toast(T('Распознавание по фото работает только с интернетом. Фото можно прикрепить к записи ниже'), true); }
+    const img = await compressImage(f, 1400); e.target.value = ''; if (!img) return;
+    $('#preview').innerHTML = `<div class="snap-wait"><img src="${img}" alt=""><span>${T('Смотрю на фото…')}</span></div>`;
+    $('#snapBtn').classList.add('disabled');
+    try {
+      const r = await api('/ai/photo', { method: 'POST', body: { photo: img } });
+      parsed = r.items; parsedPhoto = r.photo_ref;
+      if (!parsed.length) { $('#preview').innerHTML = `<div class="small" style="color:var(--amber);margin-top:8px">${esc(r.note || T('Не удалось определить отходы на фото'))}</div>`; return; }
+      renderPreview('photo', [], r.note);
+    } catch (err) { $('#preview').innerHTML = ''; toast(err.message, true); }
+    finally { $('#snapBtn').classList.remove('disabled'); }
+  };
   // ---- электронные весы (эмулятор устройства; реальные весы шлют POST /api/scale/entries)
   $('#scale').onclick = async () => {
     if (!st.typeId) return toast('Выберите вид отхода и положите его на весы', true);
@@ -535,15 +855,16 @@ async function pageForm(main) {
   $('#quickCard').classList.toggle('hidden', !report.editable);
 
   telegramCard($('#tgCard'));
+  if (st.productId && prodById(st.productId)) { $('#product').value = prodName(prodById(st.productId)); }
   if (st.typeId && typeById(st.typeId)) { selectType(st.typeId, true); if (st.methodId) $('#method').value = st.methodId; renderRecHint(); if (st.qty) $('#hint').textContent = 'Восстановлен несохранённый черновик'; }
   renderAll();
 }
 
-function compressImage(file) {
+function compressImage(file, max = 1024) {
   return new Promise((res) => {
     const img = new Image(); const url = URL.createObjectURL(file);
     img.onload = () => {
-      const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+      const k = Math.min(1, max / Math.max(img.width, img.height));
       const c = document.createElement('canvas'); c.width = img.width * k; c.height = img.height * k;
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.72));
     };
@@ -642,6 +963,168 @@ function chipRange(k) {
 }
 
 // ---------- МОЯ СВОДКА (ответственное лицо: данные под рукой с телефона) ----------
+// ---------- прогноз «сколько готовить» и итог дня ----------
+const WD_FULL = { ru: { вс: 'воскресенье', пн: 'понедельник', вт: 'вторник', ср: 'среда', чт: 'четверг', пт: 'пятница', сб: 'суббота' },
+  kz: { вс: 'жексенбі', пн: 'дүйсенбі', вт: 'сейсенбі', ср: 'сәрсенбі', чт: 'бейсенбі', пт: 'жұма', сб: 'сенбі' } };
+const CONF = { high: ['надёжно', 'сенімді'], medium: ['средне', 'орташа'], low: ['мало данных', 'дерек аз'] };
+async function pagePlan(main, r) {
+  const staff = S.user.role !== 'resp';
+  const orgs = staff ? await api('/orgs') : [];
+  const orgId = staff ? (+r.q.org || orgs.find((o) => /столов/i.test(o.type))?.id || orgs[0]?.id) : S.user.org_id;
+  const q = new URLSearchParams({ ...(staff ? { org: orgId } : {}), ...(r.q.date ? { date: r.q.date } : {}) });
+  const f = await api('/forecast?' + q);
+  const kz = LANG === 'kz';
+  const nm = (x) => (kz && x.name_kz) || x.name;
+  const wdName = WD_FULL[kz ? 'kz' : 'ru'][f.weekday];
+  const t = f.totals;
+  main.innerHTML = `
+    <div class="page-head"><div><h1>${T('Сколько готовить')}: ${esc(wdName)}, ${dmy(f.date)}</h1>
+      <div class="muted small">${T('Прогноз спроса по блюдам: тот же день недели за')} ${f.weeks} ${T('нед.')} + ${T('запас')} ${f.safetyPct}%</div></div>
+      <div class="row" style="gap:8px;align-items:flex-end">
+        ${staff ? `<div class="field" style="margin:0"><label>${esc(S.cfg.orgLabel)}</label><select id="pOrg">${orgs.map((o) => `<option value="${o.id}" ${o.id === orgId ? 'selected' : ''}>${esc(o.short)}</option>`).join('')}</select></div>` : ''}
+        <div class="field" style="margin:0"><label>${T('Дата')}</label><input type="date" id="pDate" value="${f.date}"></div></div></div>
+    ${!f.items.length ? `<div class="card"><h3>${f.closed ? T('В этот день недели обычно не готовят') : T('Пока недостаточно истории')}</h3>
+      <p class="muted">${T('Вносите внизу «Итог дня»: сколько приготовили и сколько осталось. Через 2 недели система начнёт подсказывать, сколько готовить, чтобы не выбрасывать.')}</p></div>` : `
+    <section class="hero">
+      <div class="eyebrow">${T('План на')} ${esc(wdName)}</div>
+      <h1 style="margin-bottom:8px">${t.save_kg >= 1 ? `${T('Можно готовить на')} ${fmt(t.save_kg)} ${T('кг меньше — и никто не останется голодным')}` : T('Объёмы уже близки к спросу 👍')}</h1>
+      <div class="hero-kpis">
+        <div class="hero-kpi lime"><div class="label">${T('Рекомендуем приготовить')}</div><div class="value">${fmt(t.rec_kg)} кг</div><div class="sub">${T('обычно')} ${fmt(t.usual_kg)} кг</div></div>
+        <div class="hero-kpi"><div class="label">${T('Меньше отходов')}</div><div class="value">${fmt(t.save_kg)} кг</div><div class="sub">${T('за день')}</div></div>
+        <div class="hero-kpi"><div class="label">${T('Экономия')}</div><div class="value">${fmt(t.save_kzt, 0)} ₸</div><div class="sub">${T('по ценам справочника')}</div></div>
+        <div class="hero-kpi"><div class="label">CO₂</div><div class="value">−${fmt(t.save_co2)} кг</div><div class="sub">${T('не уйдёт на полигон')}</div></div>
+      </div>
+    </section>
+    <div class="card"><div class="table-wrap"><table><thead><tr><th>${T('Блюдо')}</th><th class="num">${T('Обычно готовят')}</th><th class="num">${T('Остаётся')}</th><th class="num">${T('Рекомендуем')}</th><th class="num">${T('Экономия')}</th><th>${T('Точность')}</th></tr></thead>
+      <tbody>${f.items.map((x) => `<tr><td><b>${esc(nm(x))}</b></td><td class="num">${fmt(x.usual_kg)} кг</td>
+        <td class="num ${x.leftover_pct >= 15 ? 'up' : ''}">${fmt(x.leftover_kg)} кг · ${x.leftover_pct}%</td>
+        <td class="num"><b>${fmt(x.rec_kg)} кг</b></td><td class="num">${x.save_kg >= 0.1 ? `−${fmt(x.save_kg)} кг · ${fmt(x.save_kzt, 0)} ₸` : '—'}</td>
+        <td><span class="badge ${x.confidence === 'high' ? 'good' : x.confidence === 'low' ? 'warn' : ''}">${CONF[x.confidence][kz ? 1 : 0]} · ${x.n} ${T('нед.')}</span></td></tr>`).join('')}</tbody></table></div>
+      <p class="small muted" style="margin:10px 0 0">${T('Спрос = приготовлено − осталось. Свежие недели весят больше. Если блюдо закончилось раньше времени — укажите остаток 0, прогноз это учтёт.')}</p></div>`}
+    ${f.track?.days ? `<div class="card small"><b>${T('За 30 дней')}:</b> ${T('приготовлено')} ${fmt(f.track.cooked_kg)} кг, ${T('осталось')} ${fmt(f.track.leftover_kg)} кг (<b>${fmt(f.track.leftover_pct)}%</b>) · ${f.track.days} ${T('дн. с данными')}</div>` : ''}
+    ${staff ? '' : '<div class="card" id="dayCard"></div>'}`;
+  const reload = () => go('/plan?' + new URLSearchParams({ ...(staff ? { org: $('#pOrg').value } : {}), date: $('#pDate').value }));
+  $('#pDate').onchange = reload; if ($('#pOrg')) $('#pOrg').onchange = reload;
+  if (!staff) dayForm($('#dayCard'));
+}
+// итог дня: приготовлено / осталось по блюдам
+async function dayForm(el, date = todayIso()) {
+  const [d, { products }] = await Promise.all([api('/production?date=' + date), api('/products')]);
+  const kz = LANG === 'kz'; const nm = (x) => (kz && x.name_kz) || x.name;
+  const ids = [...new Set([...d.rows.map((x) => x.product_id), ...d.usual.map((x) => x.product_id)])];
+  const row = (pid) => { const p = products.find((x) => x.id === pid) || d.usual.find((x) => x.product_id === pid); const cur = d.rows.find((x) => x.product_id === pid) || {};
+    return `<div class="entry" data-pp="${pid}"><div class="t">${esc(nm(p || { name: '?' }))}</div>
+      <input data-c inputmode="decimal" placeholder="${T('приготовлено')}" value="${cur.cooked_kg ?? ''}" style="width:96px;text-align:right">
+      <input data-l inputmode="decimal" placeholder="${T('осталось')}" value="${cur.leftover_kg ?? ''}" style="width:86px;text-align:right"><span class="small">кг</span></div>`; };
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">${T('Итог дня: приготовлено / осталось')}</h3>
+      <input type="date" id="dDate" value="${date}" max="${todayIso()}" style="width:auto"></div>
+    <p class="small muted">${T('Вносите в конце смены — по этим цифрам система считает спрос и советует, сколько готовить. Остаток — то, что не продали.')}</p>
+    <div id="dRows">${ids.map(row).join('') || `<p class="muted small">${T('Добавьте блюда, которые готовите')}</p>`}</div>
+    <div class="row" style="margin-top:10px;gap:8px;align-items:center"><select id="dAdd" style="flex:1"><option value="">＋ ${T('Добавить блюдо')}</option>${products.filter((p) => !ids.includes(p.id) && !['oil', 'cardboard', 'pet', 'film', 'glass', 'can', 'packaging', 'eggshell', 'bones'].includes(p.kind)).map((p) => `<option value="${p.id}">${esc(nm(p))}</option>`).join('')}</select>
+      <button id="dSave">${T('Сохранить итог дня')}</button></div>`;
+  $('#dDate', el).onchange = (e) => dayForm(el, e.target.value);
+  $('#dAdd', el).onchange = (e) => { const id = +e.target.value; if (!id) return; $('#dRows', el).querySelector('p')?.remove(); $('#dRows', el).insertAdjacentHTML('beforeend', row(id)); e.target.querySelector(`option[value="${id}"]`).remove(); e.target.value = ''; };
+  $('#dSave', el).onclick = async () => {
+    const items = $$('[data-pp]', el).map((x) => ({ product_id: +x.dataset.pp, cooked_kg: $('[data-c]', x).value.replace(',', '.'), leftover_kg: $('[data-l]', x).value.replace(',', '.') })).filter((x) => x.cooked_kg !== '');
+    try { const r = await api('/production', { method: 'POST', body: { date: $('#dDate', el).value, items } }); buzz(); toast(`${T('Сохранено блюд')}: ${r.saved}`); }
+    catch (e) { toast(e.message, true); }
+  };
+}
+
+// ---------- эко-калькулятор «Своя кружка» ----------
+// Одноразовый стакан с крышкой ≈ 14 г (бумага с ПЭ + пластиковая крышка), след ≈ 21 г CO₂e по нижней оценке (Huhtamaki LCA);
+// независимые оценки — до 61–110 г. Многоразовая кружка «отбивает» свой след примерно за 20–40 использований.
+const CUP = { g: 14, co2g: 21, co2gHigh: 61 };
+function pageEco(main) {
+  const disc = Number(S.cfg?.cupDiscountKzt ?? 100);
+  main.innerHTML = `
+    <section class="hero">
+      <div class="eyebrow">${T('Эко-калькулятор')}</div>
+      <h1>${T('Своя кружка: сколько вы сэкономите')}</h1>
+      <div class="muted small">${T('Приходите в кофейню со своей кружкой или термосом — получаете скидку, а одноразовый стакан не попадает на полигон.')}</div>
+    </section>
+    <div class="grid g2">
+      <div class="card">
+        <div class="field"><label>${T('Сколько кофе/чая в день')}</label><div class="qty-row"><button type="button" class="btn-light" data-d="-1" style="min-width:52px">−</button><input id="eN" inputmode="numeric" value="2" style="text-align:center"><button type="button" class="btn-light" data-d="1" style="min-width:52px">＋</button></div></div>
+        <div class="field"><label>${T('Дней в неделю')}</label><input id="eW" type="range" min="1" max="7" value="5"><div class="small muted"><span id="eWv">5</span> ${T('дн.')}</div></div>
+        <div class="field"><label>${T('Скидка за свою кружку, ₸')}</label><input id="eD" inputmode="numeric" value="${disc}"></div>
+        <div class="field"><label>${T('Сколько человек (вы, группа, факультет)')}</label><input id="eP" inputmode="numeric" value="1"></div>
+      </div>
+      <div class="card" id="eOut"></div>
+    </div>
+    <div class="card small muted">${T('Допущения')}: ${T('стакан с крышкой')} ≈ ${CUP.g} г; ${T('углеродный след')} ≈ ${CUP.co2g} г CO₂e ${T('на стакан по нижней оценке')} (Huhtamaki LCA), ${T('по другим исследованиям — до')} ${CUP.co2gHigh}–110 г. ${T('Учебный год ≈ 36 недель. Многоразовая кружка окупает свой собственный след примерно за 20–40 использований.')}</div>`;
+  const calc = () => {
+    const n = Math.max(0, Math.min(20, +$('#eN').value || 0)); const w = +$('#eW').value; const d = Math.max(0, +$('#eD').value || 0); const ppl = Math.max(1, Math.min(100000, +$('#eP').value || 1));
+    $('#eWv').textContent = w;
+    const per = (weeks) => n * w * weeks * ppl;
+    const rows = [[T('Неделя'), 1], [T('Месяц'), 4.3], [T('Учебный год'), 36]];
+    const yr = per(36);
+    $('#eOut').innerHTML = `<h3>${n} ${T('чашки в день')} × ${w} ${T('дн.')}${ppl > 1 ? ` × ${fmt(ppl, 0)} ${T('чел.')}` : ''}</h3>
+      <div class="table-wrap"><table><thead><tr><th></th><th class="num">${T('Стаканов')}</th><th class="num">${T('Мусора')}</th><th class="num">CO₂</th><th class="num">${T('Скидка')}</th></tr></thead><tbody>
+      ${rows.map(([l, wk]) => { const c = per(wk); return `<tr><td>${l}</td><td class="num">${fmt(c, 0)}</td><td class="num">${c * CUP.g >= 1000 ? fmt(c * CUP.g / 1000, 1) + ' кг' : fmt(c * CUP.g, 0) + ' г'}</td><td class="num">${fmt(c * CUP.co2g / 1000, 1)} кг</td><td class="num"><b>${fmt(c * d, 0)} ₸</b></td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="alert alert-green" style="margin-top:12px">🌱 ${T('За учебный год')}: <b>${fmt(yr, 0)}</b> ${T('стаканов не окажутся на полигоне')}, ${T('а вы сэкономите')} <b>${fmt(yr * d, 0)} ₸</b>.
+        ${n >= 2 ? `<br>${T('Даже если в свою кружку брать только одну чашку из')} ${n} — ${fmt(yr / n, 0)} ${T('стаканов и')} ${fmt(yr / n * d, 0)} ₸ ${T('за год')}.` : ''}</div>
+      <div class="small muted">${T('Это как')} ${fmt(yr * CUP.co2g / 1000 / 0.12, 0)} ${T('км на автомобиле')} (≈ 120 г CO₂/км).</div>`;
+  };
+  $$('[data-d]').forEach((b) => b.onclick = () => { $('#eN').value = Math.max(0, (+$('#eN').value || 0) + +b.dataset.d); calc(); });
+  ['#eN', '#eW', '#eD', '#eP'].forEach((id) => $(id).oninput = calc);
+  calc();
+}
+
+// ---------- цели и рейтинг ----------
+const BADGE_KZ = { goal: 'Мақсат орындалды', divert: 'Полигонға емес', regular: 'Тұрақты есеп', ontime: 'Есеп уақытында', growth: 'Өсім', nodata: 'Жазба жоқ' };
+const badgeText = (b) => (LANG === 'kz' && BADGE_KZ[b.k] ? BADGE_KZ[b.k] + (b.k === 'growth' ? ` ${b.text.replace(/\D+/, '')}` : '') : b.text);
+const badgesHtml = (bs) => `<div class="badges">${bs.map((b) => `<span class="badge ${b.level}">${esc(badgeText(b))}</span>`).join('')}</div>`;
+function goalBar(r) {
+  if (r.progress == null) return `<div class="small muted">${T('Мало данных для сравнения с базой')}</div>`;
+  const w = Math.max(3, Math.min(100, r.progress));
+  return `<div class="goal-bar ${r.progress >= 100 ? 'ok' : r.progress < 0 ? 'over' : ''}"><i style="width:${r.progress < 0 ? Math.max(3, Math.min(100, -r.progress)) : w}%"></i></div>
+    <div class="small muted">${fmt(r.kgPerDay)} ${T('кг/день')} · ${T('база')} ${fmt(r.basePerDay)} · ${T('цель')} ≤ ${fmt(r.targetPerDay)} (−${fmt(r.goal.reduce_pct, 0)}%)</div>`;
+}
+function goalCard(g) {
+  const ch = g.changePct;
+  const head = ch == null ? T('Цель месяца') : ch <= -g.goal.reduce_pct ? `🎉 ${T('Цель месяца выполнена')}` : ch < 0 ? `${T('Отходов меньше на')} ${fmt(-ch)}% — ${T('до цели')} ${fmt(g.goal.reduce_pct + ch)}%` : `${T('Отходов больше на')} ${fmt(ch)}% ${T('к базе')}`;
+  return `<a class="card goal-card" href="#/rating" style="display:block;color:inherit;text-decoration:none">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><div class="small muted">${T('Цель и рейтинг')} · ${esc(MONTHS[new Date().getMonth()])}</div><h3 style="margin:2px 0 0">${head}</h3></div>
+    <div class="rank-score">${g.place}<small>${T('место из')} ${g.of}</small></div></div>
+    ${goalBar(g)}${badgesHtml(g.badges)}${g.savedKg ? `<div class="small" style="margin-top:6px">🌱 ${T('Сэкономлено к базе')}: <b>${fmt(g.savedKg)} кг</b></div>` : ''}</a>`;
+}
+async function pageRating(main, r) {
+  const cur = todayIso().slice(0, 7);
+  const prev = (() => { const d = new Date(cur + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
+  const period = r.q.period || cur;
+  const d = await api('/rating?period=' + period);
+  const canEdit = ['reviewer', 'admin'].includes(S.user.role);
+  main.innerHTML = `
+    <div class="page-head"><div><h1>${T('Рейтинг подразделений')}</h1><div class="muted small">${esc(d.label)} · ${T('сравнение каждой организации со своей базой')} (${dmy(d.baseline.from)}–${dmy(d.baseline.to)})</div></div>
+      <div class="period-chips">${[[cur, T('Этот месяц')], [prev, T('Прошлый месяц')]].map(([p, l]) => `<a class="pchip ${p === period ? 'on' : ''}" style="text-decoration:none" href="#/rating?period=${p}">${l}</a>`).join('')}</div></div>
+    <div class="card">${d.rows.map((x) => `<div class="rank-row ${x.place <= 3 ? 'top' + x.place : ''} ${x.org_id === d.myOrg ? 'mine' : ''}">
+      <div class="rank-n">${x.place}</div>
+      <div style="min-width:0"><b>${esc(x.short)}</b> <span class="small muted">${esc(x.type)}</span>
+        ${goalBar(x)}${badgesHtml(x.badges)}
+        ${canEdit ? `<button class="btn-light btn-sm" data-goal="${x.org_id}" style="margin-top:8px">🎯 ${T('Цель')}: −${fmt(x.goal.reduce_pct, 0)}% · ${T('мимо полигона')} ${fmt(x.goal.diverted_pct, 0)}%</button>` : ''}</div>
+      <div class="rank-score">${x.score}<small>${T('баллов')}</small></div></div>`).join('')}</div>
+    <div class="card small muted"><b>${T('Как считаются баллы (из 100)')}</b><br>
+      40 — ${T('снижение кг на активный день к своей базе (3 предыдущих месяца); цель выполнена = 40')}<br>
+      30 — ${T('доля отходов мимо полигона (компост, корм, переработка, передача) к цели')}<br>
+      20 — ${T('регулярность учёта: дни с записями к ожидаемым')}<br>
+      10 — ${T('отчёт за прошлый месяц сдан до 5 числа')}<br>
+      ${T('Так столовая и кафедра сравниваются честно — по динамике, а не по килограммам.')}</div>`;
+  $$('[data-goal]').forEach((b) => b.onclick = () => {
+    const x = d.rows.find((y) => y.org_id === +b.dataset.goal);
+    modal(`<h2>${T('Цель')}: ${esc(x.short)}</h2>
+      <div class="field"><label>${T('Снизить отходы (кг/день) к базе на, %')}</label><input id="gR" type="number" min="0" max="90" step="1" value="${x.goal.reduce_pct}"></div>
+      <div class="field"><label>${T('Доля мимо полигона, %')}</label><input id="gD" type="number" min="0" max="100" step="5" value="${x.goal.diverted_pct}"></div>
+      <div class="row"><button id="gS">${T('Сохранить')}</button><button class="btn-light" data-close>${T('Отмена')}</button></div>`, (m, close) => {
+      $('#gS', m).onclick = async () => {
+        try { await api('/goals/' + x.org_id, { method: 'PUT', body: { reduce_pct: $('#gR', m).value, diverted_pct: $('#gD', m).value } }); close(); toast(T('Цель сохранена')); route(); }
+        catch (e) { toast(e.message, true); }
+      };
+    });
+  });
+}
+
 async function pageMe(main) {
   const s = await api('/my-summary');
   const arrow = (c) => c == null ? '<span class="muted">—</span>' : `<span class="${c > 0 ? 'up' : 'down'}">${c > 0 ? '▲' : '▼'} ${fmt(Math.abs(c))}%</span>`;
@@ -649,28 +1132,29 @@ async function pageMe(main) {
   const rep = s.report;
   main.innerHTML = `
     <section class="hero">
-      <div class="eyebrow">${esc(S.user.org_short)} · ${new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-      <h1>Моя сводка</h1>
-      <div class="muted small">Все ваши данные под рукой: сегодня, неделя, месяц. Отчёт — одной кнопкой.</div>
+      <div class="eyebrow">${esc(S.user.org_short)} · ${new Date().toLocaleDateString(LANG === 'kz' ? 'kk-KZ' : 'ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+      <h1>${T('Моя сводка')}</h1>
+      <div class="muted small">${T('Все ваши данные под рукой: сегодня, неделя, месяц. Отчёт — одной кнопкой.')}</div>
       <div class="hero-kpis">
-        <div class="hero-kpi lime"><div class="label">Сегодня</div><div class="value">${fmt(s.today.kg)} кг</div><div class="sub">${s.today.entries} взвеш.</div></div>
-        <div class="hero-kpi"><div class="label">7 полных дней</div><div class="value">${fmt(s.week.kg)} кг</div><div class="sub">к прошлой неделе: ${arrow(s.week.changePct)}</div></div>
-        <div class="hero-kpi"><div class="label">Этот месяц</div><div class="value">${fmt(s.month.kg)} кг</div><div class="sub">${s.month.entries} записей</div></div>
-        <div class="hero-kpi"><div class="label">CO₂ за месяц</div><div class="value">${fmt(s.month.co2)} кг</div><div class="sub">можно −${fmt(s.month.co2Potential)} кг</div></div>
-        <div class="hero-kpi"><div class="label">Отчёт за месяц</div><div class="value" style="font-size:17px;margin-top:6px">${chip(rep.status, rep.status_ru)}</div><div class="sub">срок — до 5 числа</div></div>
+        <div class="hero-kpi lime"><div class="label">${T('Сегодня')}</div><div class="value">${fmt(s.today.kg)} кг</div><div class="sub">${s.today.entries} ${T('взвеш.')}</div></div>
+        <div class="hero-kpi"><div class="label">${T('7 полных дней')}</div><div class="value">${fmt(s.week.kg)} кг</div><div class="sub">${T('к прошлой неделе')}: ${arrow(s.week.changePct)}</div></div>
+        <div class="hero-kpi"><div class="label">${T('Этот месяц')}</div><div class="value">${fmt(s.month.kg)} кг</div><div class="sub">${s.month.entries} ${T('записей')}</div></div>
+        <div class="hero-kpi"><div class="label">${T('CO₂ за месяц')}</div><div class="value">${fmt(s.month.co2)} кг</div><div class="sub">${T('можно')} −${fmt(s.month.co2Potential)} кг</div></div>
+        <div class="hero-kpi"><div class="label">${T('Отчёт за месяц')}</div><div class="value" style="font-size:17px;margin-top:6px">${chip(rep.status, rep.status_ru)}</div><div class="sub">${T('срок — до 5 числа')}</div></div>
       </div>
     </section>
     ${rep.status === 'returned' ? `<div class="alert alert-red"><b>Отчёт возвращён:</b> ${esc(rep.last_comment)} — <a href="#/form">исправить</a></div>` : ''}
+    ${s.goal ? goalCard(s.goal) : ''}
     <div class="quick-actions">
-      <a class="qa" href="#/form">${icon('edit')}<b>Внести</b><small>форма, фраза, весы</small></a>
-      <a class="qa" href="/api/my-report.xlsx?p=month">${icon('file')}<b>Отчёт за месяц</b><small>Excel, можно переслать</small></a>
-      <a class="qa" href="/api/my-report.xlsx?p=week">${icon('db')}<b>Отчёт за неделю</b><small>Excel</small></a>
-      <a class="qa" href="#/report/${rep.id}">${icon('check')}<b>Статус отчёта</b><small>история и комментарии</small></a>
+      <a class="qa" href="#/form">${icon('edit')}<b>${T('Внести')}</b><small>${T('форма, фраза, весы')}</small></a>
+      <a class="qa" href="/api/my-report.xlsx?p=month">${icon('file')}<b>${T('Отчёт за месяц')}</b><small>${T('Excel, можно переслать')}</small></a>
+      <a class="qa" href="/api/my-report.xlsx?p=week">${icon('db')}<b>${T('Отчёт за неделю')}</b><small>Excel</small></a>
+      <a class="qa" href="#/report/${rep.id}">${icon('check')}<b>${T('Статус отчёта')}</b><small>${T('история и комментарии')}</small></a>
     </div>
     <div class="grid g2">
-      <div class="card"><h3>По дням — 7 полных дней</h3><div class="chart-box" style="height:220px"><canvas id="cw"></canvas></div></div>
-      <div class="card"><h3>Что больше всего за неделю</h3>
-        ${s.week.byType.slice(0, 5).map((t) => `<div class="bar-row"><span>${esc(t.name)}</span><b>${fmt(t.kg)} кг</b><i style="width:${s.week.kg ? Math.max(4, t.kg / s.week.byType[0].kg * 100) : 0}%"></i></div>`).join('') || '<p class="muted">Нет данных за неделю</p>'}
+      <div class="card"><h3>${T('По дням — 7 полных дней')}</h3><div class="chart-box" style="height:220px"><canvas id="cw"></canvas></div></div>
+      <div class="card"><h3>${T('Что больше всего за неделю')}</h3>
+        ${s.week.byType.slice(0, 5).map((t) => `<div class="bar-row"><span>${esc(t.name)}</span><b>${fmt(t.kg)} кг</b><i style="width:${s.week.kg ? Math.max(4, t.kg / s.week.byType[0].kg * 100) : 0}%"></i></div>`).join('') || `<p class="muted">${T('Нет данных за неделю')}</p>`}
         <p class="small muted" style="margin:10px 0 0">Мимо полигона за месяц: <b>${fmt(s.month.diverted)}%</b>. Подсказки «🌱 Рекомендуется» в форме помогают поднять эту долю.</p></div>
     </div>
     <div class="card" id="tgCard"></div>`;
@@ -793,7 +1277,10 @@ async function pageDashboard(main, r) {
       <div class="card"><h3>Доля переработки по месяцам, %</h3><div class="chart-box"><canvas id="c4"></canvas></div></div>
     </div>
     <div class="card"><h3>Выявленные отклонения</h3>${d.anomalies.length ? `<div class="table-wrap"><table><thead><tr><th>Месяц</th><th>${esc(S.cfg.orgLabel)}</th><th>Вид отхода</th><th class="num">Факт, кг/день</th><th class="num">Среднее 3 мес.</th><th class="num">Рост</th><th class="num">Сверх нормы</th></tr></thead>
-      <tbody>${d.anomalies.map((a) => `<tr><td>${a.monthLabel}</td><td>${esc(a.org)}</td><td>${esc(a.type)}</td><td class="num">${fmt(a.curPerDay)}</td><td class="num">${fmt(a.avgPerDay)}</td><td class="num up">+${a.changePct}%</td><td class="num">${fmt(a.extraKg, 0)} кг</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Отклонений не выявлено.</p>'}</div>`;
+      <tbody>${d.anomalies.map((a) => `<tr><td>${a.monthLabel}</td><td>${esc(a.org)}</td><td>${esc(a.type)}</td><td class="num">${fmt(a.curPerDay)}</td><td class="num">${fmt(a.avgPerDay)}</td><td class="num up">+${a.changePct}%</td><td class="num">${fmt(a.extraKg, 0)} кг</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Отклонений не выявлено.</p>'}</div>
+    <div class="card"><h3>Что выбрасывают: продукты</h3>${d.byProduct?.length ? `<p class="small muted" style="margin-top:-6px">По записям, где указан продукт (ввод фразой, по фото, в Telegram или в поле «Продукт»). Потери — по ценам справочника продуктов.</p>
+      ${d.byProduct.map((p) => `<div class="bar-row"><span>${esc(p.name)}</span><b>${fmt(p.kg)} кг${p.kzt ? ` · ≈ ${fmt(p.kzt, 0)} ₸` : ''}</b><i style="width:${Math.max(4, p.kg / d.byProduct[0].kg * 100)}%"></i></div>`).join('')}`
+      : '<p class="muted small">Пока нет записей с указанием продукта. Продукт определяется автоматически при вводе фразой («хлеб 3 кг»), по фото и в Telegram — данные появятся после проверки отчётов.</p>'}</div>`;
   loadConclusion($('#concl'), new URLSearchParams({ from: d.from, to: d.to, ...(r.q.org ? { org: r.q.org } : {}) }));
   $('#range').onchange = (e) => go('/dashboard?' + new URLSearchParams({ range: e.target.value, ...(r.q.org ? { org: r.q.org } : {}) }));
   if ($('#org')) $('#org').onchange = (e) => go('/dashboard?' + new URLSearchParams({ range, ...(e.target.value ? { org: e.target.value } : {}) }));
@@ -838,7 +1325,7 @@ async function pageControl(main, r) {
 async function pageAdmin(main, r) {
   const tab = r.q.tab || 'settings';
   main.innerHTML = `<div class="page-head"><h1>${T('Администрирование')}</h1></div>
-    <div class="tabs">${[['settings', 'Настройки и справочники'], ['orgs', S.cfg.orgsLabel], ['users', 'Пользователи'], ['types', 'Виды отходов'], ['methods', 'Способы утилизации'], ['scales', 'Весы (API)']].map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}</button>`).join('')}</div><div id="tab"></div>`;
+    <div class="tabs">${[['settings', 'Настройки и справочники'], ['orgs', S.cfg.orgsLabel], ['users', 'Пользователи'], ['types', 'Виды отходов'], ['products', 'Продукты (датасет)'], ['methods', 'Способы утилизации'], ['scales', 'Весы (API)']].map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}</button>`).join('')}</div><div id="tab"></div>`;
   $$('[data-tab]').forEach((b) => b.onclick = () => go('/admin?tab=' + b.dataset.tab));
   const el = $('#tab');
   const orgs = await api('/orgs');
@@ -945,6 +1432,42 @@ async function pageAdmin(main, r) {
       try { const r = await api('/reference/import', { method: 'POST', body: { file, org_id: $('#refOrg').value } });
         $('#refRes').innerHTML = `<div class="alert alert-green" style="margin:0">В файле: видов ${r.typesInFile}, способов ${r.methodsInFile}. Добавлено видов ${r.typesAdded}, обновлено ${r.typesUpdated}; способов добавлено ${r.methodsAdded}, обновлено ${r.methodsUpdated}.</div>`; }
       catch (err) { $('#refRes').innerHTML = `<div class="alert alert-red" style="margin:0">${esc(err.message)}</div>`; }
+    };
+  }
+  if (tab === 'products') {
+    const { kinds, products } = await api('/products?all=1');
+    const kindSel = (v, attr) => `<select ${attr}>${Object.entries(kinds).map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    el.innerHTML = `<div class="card"><h3>Справочник продуктов — датасет для распознавания</h3>
+      <p class="small">По этому списку система узнаёт продукт во фразе («хлеб 3 кг», «картоп 12 кило»), на фото и в Telegram, сама подбирает вид отхода организации по роду продукта
+        и считает потери в ₸ по цене за кг. Синонимы — через запятую, можно на русском и казахском.</p>
+      <div class="row" style="align-items:flex-end;flex-wrap:wrap;gap:10px">
+        <label class="btn btn-light btn-sm" style="margin:0;color:var(--ink)">⬆ Загрузить CSV / Excel<input type="file" id="pFile" accept=".csv,.xlsx,text/csv" hidden></label>
+        <a class="btn btn-light btn-sm" href="/api/products.csv">⬇ Скачать датасет (CSV)</a>
+        <span class="small muted">Столбцы: name; name_kz; synonyms; kind; price_kzt_kg. Существующие продукты обновляются по названию.</span></div>
+      <div id="pRes" style="margin-top:10px"></div></div>
+    <div class="card"><h3>Добавить продукт</h3><form id="f" class="row" style="flex-wrap:wrap">
+      <div class="field"><label>Название</label><input name="name" required placeholder="напр. Манты"></div>
+      <div class="field"><label>Қазақша</label><input name="name_kz" placeholder="Мәнті"></div>
+      <div class="field" style="flex:2"><label>Синонимы</label><input name="synonyms" placeholder="манты, мант, мәнті"></div>
+      <div class="field"><label>Род отхода</label>${kindSel('plate', 'name="kind"')}</div>
+      <div class="field"><label>Цена, ₸/кг</label><input name="price_kzt_kg" inputmode="decimal" placeholder="0"></div><button>Добавить</button></form></div>
+    <div class="card"><div class="table-wrap"><table><thead><tr><th>Продукт</th><th>Қазақша</th><th>Синонимы</th><th>Род</th><th class="num">₸/кг</th><th class="num">Записей</th><th>Активен</th></tr></thead>
+      <tbody>${products.map((p) => `<tr data-p="${p.id}"><td><b>${esc(p.name)}</b></td><td><input data-f="name_kz" value="${esc(p.name_kz || '')}" style="min-width:110px"></td>
+        <td><input data-f="synonyms" value="${esc(p.synonyms)}" style="min-width:220px"></td><td>${kindSel(p.kind, 'data-f="kind"')}</td>
+        <td class="num"><input data-f="price_kzt_kg" value="${p.price_kzt_kg}" inputmode="decimal" style="width:80px;text-align:right"></td><td class="num">${p.used}</td>
+        <td><input type="checkbox" data-f="active" ${p.active ? 'checked' : ''} style="width:auto"></td></tr>`).join('')}</tbody></table></div>
+      <p class="small muted">Цены ориентировочные (розница, Алматы) — уточните по закупочным ценам столовой.</p></div>`;
+    $('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/products', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Продукт добавлен'); route(); } catch (err) { toast(err.message, true); } };
+    $$('[data-p]').forEach((tr) => tr.querySelectorAll('[data-f]').forEach((inp) => inp.onchange = async () => {
+      const body = {}; tr.querySelectorAll('[data-f]').forEach((x) => { body[x.dataset.f] = x.type === 'checkbox' ? x.checked : x.value; });
+      try { await api('/products/' + tr.dataset.p, { method: 'PUT', body }); toast('Сохранено'); } catch (err) { toast(err.message, true); }
+    }));
+    $('#pFile').onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const file = await new Promise((res) => { const rd = new FileReader(); rd.onload = () => res(rd.result); rd.readAsDataURL(f); });
+      $('#pRes').textContent = 'Загружаю…';
+      try { const r = await api('/products/import', { method: 'POST', body: { file } }); $('#pRes').innerHTML = `<div class="alert alert-green" style="margin:0">Добавлено: ${r.added}, обновлено: ${r.updated}.</div>`; setTimeout(route, 1200); }
+      catch (err) { $('#pRes').innerHTML = `<div class="alert alert-red" style="margin:0">${esc(err.message)}</div>`; }
     };
   }
   if (tab === 'scales') {

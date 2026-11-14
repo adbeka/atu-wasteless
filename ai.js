@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk').default;
 const { db, nowIso } = require('./db');
+const PROD = require('./products');
 
 const MODEL = process.env.AI_MODEL || 'claude-opus-5-5';
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 12000);
@@ -87,7 +88,7 @@ const stem = (w) => w.toLowerCase().replace(/ё/g, 'е').slice(0, Math.max(4, Ma
 const words = (s) => s.toLowerCase().replace(/ё/g, 'е').match(/[a-zа-яәіңғүұқөһ]{3,}/gi) || [];
 const STOP = new Set(['отходы', 'отход', 'отходов', 'было', 'сегодня', 'еще', 'ещё', 'итого', 'примерно', 'около']);
 
-function rulesParse(text, types) {
+function rulesParse(text, types, products = PROD.list()) {
   const out = [];
   // делим на фрагменты по запятым, «и», точкам с запятой
   const parts = String(text).split(/[;\n]|,(?!\d)| и | плюс /i).map((s) => s.trim()).filter(Boolean);
@@ -96,7 +97,12 @@ function rulesParse(text, types) {
     if (!m) continue;
     let qty = num(m[1]); const u = (m[2] || '').toLowerCase();
     if (/^(г|гр|грамм)/.test(u)) qty = qty / 1000;
-    const pw = words(p.replace(m[0], '')).filter((w) => !STOP.has(w)).map(stem);
+    const rest = p.replace(m[0], ' ');
+    // 1) сначала продукт из датасета («хлеб», «картошка», «плов») → вид отхода организации
+    const prod = PROD.findProduct(rest, products);
+    const pt = prod && PROD.typeFor(prod, types);
+    if (pt && qty > 0) { out.push({ waste_type_id: pt.id, product_id: prod.id, product: prod.name, qty: Math.round(qty * 100) / 100, confidence: 0.9, fragment: p }); continue; }
+    const pw = words(rest).filter((w) => !STOP.has(w)).map(stem);
     let best = null, bestScore = 0;
     for (const t of types) {
       const tw = words(t.name).filter((w) => !STOP.has(w)).map(stem);
@@ -109,23 +115,64 @@ function rulesParse(text, types) {
 }
 
 const PARSE_SYSTEM = `Ты разбираешь фразу сотрудника столовой/кафедры о взвешивании пищевых отходов.
-Сопоставь каждое упоминание с видом отхода СТРОГО из переданного справочника (по id) и извлеки количество в единице этого вида (кг или л; граммы переведи в кг).
-Ответ — только JSON без пояснений: {"items":[{"waste_type_id":число,"qty":число,"fragment":"исходный кусок фразы"}],"unknown":["что не удалось сопоставить"]}.
+Сопоставь каждое упоминание с видом отхода СТРОГО из переданного справочника видов (по id) и извлеки количество в единице этого вида (кг или л; граммы переведи в кг).
+Если упомянут конкретный продукт из справочника продуктов (хлеб, рис, картофель…) — укажи его product_id, иначе null.
+Фраза может быть на русском или казахском.
+Ответ — только JSON без пояснений: {"items":[{"waste_type_id":число,"product_id":число|null,"qty":число,"fragment":"исходный кусок фразы"}],"unknown":["что не удалось сопоставить"]}.
 Если вид не найден в справочнике — положи его в unknown, не выдумывай id.`;
 
+function validItems(items, types, products) {
+  return (items || []).filter((x) => types.some((t) => t.id === +x.waste_type_id) && num(x.qty) > 0).map((x) => {
+    const p = products.find((y) => y.id === +x.product_id);
+    return { waste_type_id: +x.waste_type_id, product_id: p ? p.id : null, product: p ? p.name : null, qty: Math.round(num(x.qty) * 100) / 100,
+      fragment: x.fragment || '', ...(x.qty_source ? { qty_source: x.qty_source === 'scale' ? 'scale' : 'estimate' } : {}) };
+  });
+}
+const refJson = (types, products) => `Справочник видов: ${JSON.stringify(types.map((t) => ({ id: t.id, name: t.name, unit: t.unit })))}
+Справочник продуктов: ${JSON.stringify(products.map((p) => ({ id: p.id, name: p.name })))}`;
+const jsonOf = (raw) => JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+
 async function parse(text, types) {
-  const valid = (items) => (items || []).filter((x) => types.some((t) => t.id === +x.waste_type_id) && num(x.qty) > 0)
-    .map((x) => ({ waste_type_id: +x.waste_type_id, qty: Math.round(num(x.qty) * 100) / 100, fragment: x.fragment || '' }));
+  const products = PROD.list();
+  const valid = (items) => validItems(items, types, products);
   if (enabled()) {
     try {
-      const ref = types.map((t) => ({ id: t.id, name: t.name, unit: t.unit }));
-      const raw = await ask(PARSE_SYSTEM, `Справочник: ${JSON.stringify(ref)}\nФраза: «${String(text).slice(0, 500)}»`);
-      const json = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+      const raw = await ask(PARSE_SYSTEM, `${refJson(types, products)}\nФраза: «${String(text).slice(0, 500)}»`);
+      const json = jsonOf(raw);
       const items = valid(json.items);
       if (items.length) return { items, unknown: json.unknown || [], source: 'ai' };
     } catch (e) { /* падаем в правила */ }
   }
-  return { items: rulesParse(text, types), unknown: [], source: 'rules' };
+  return { items: rulesParse(text, types, products), unknown: [], source: 'rules' };
 }
 
-module.exports = { enabled, MODEL, conclusion, factsFrom, parse, rulesParse };
+// ---------- 3. Распознавание по фото: продукт/вид отхода и вес (с табло весов или оценка) ----------
+const PHOTO_SYSTEM = `Ты смотришь на фото с кухни столовой/кафе: пищевые отходы, тара или табло электронных весов.
+Определи, какие отходы на фото, и сопоставь их СТРОГО со справочником видов (по id) и, если возможно, со справочником продуктов (product_id).
+Вес: если на фото видно табло весов — прочитай число (qty_source "scale"); иначе оцени вес на глаз (qty_source "estimate") и будь осторожен.
+Ответ — только JSON без пояснений: {"items":[{"waste_type_id":число,"product_id":число|null,"qty":число,"qty_source":"scale"|"estimate","fragment":"что видно, 3–6 слов"}],"note":"короткий комментарий для сотрудника"}.
+Если на фото нет отходов — {"items":[],"note":"..."}.`;
+
+async function photo(dataUrl, types) {
+  if (!enabled()) return { items: [], source: 'off', note: 'ИИ не подключён (нет ключа API) — распознавание по фото недоступно, фото можно прикрепить к записи' };
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(dataUrl || '');
+  if (!m) throw new Error('Нужно фото в формате JPEG/PNG');
+  const products = PROD.list();
+  try {
+    const response = await getClient().beta.messages.create({
+      model: MODEL, max_tokens: 1500, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: 'low' },
+      system: PHOTO_SYSTEM,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } },
+        { type: 'text', text: refJson(types, products) },
+      ] }],
+    }, { timeout: Math.max(TIMEOUT_MS, 25000) });
+    if (response.stop_reason === 'refusal') throw new Error('refusal');
+    const json = jsonOf(response.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim());
+    return { items: validItems(json.items, types, products), note: String(json.note || '').slice(0, 300), source: 'ai' };
+  } catch (e) {
+    return { items: [], source: 'error', note: `Не удалось распознать фото (${e.status || e.message}) — внесите вручную, фото прикрепится к записи` };
+  }
+}
+
+module.exports = { enabled, MODEL, conclusion, factsFrom, parse, rulesParse, photo };

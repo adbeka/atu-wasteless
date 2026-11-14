@@ -51,7 +51,7 @@ main { padding: 26px 30px 40px; max-width: 1320px; width: 100%; }
 .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .g5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .g5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .g3, .g4, .g5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g2 { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .g3, .g4, .g5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g2 { grid-template-columns: minmax(0, 1fr); } }
 
 /* hero для аналитики */
 .hero { background: radial-gradient(1200px 300px at 100% 0, rgba(242,214,75,.35), transparent 60%), linear-gradient(135deg, var(--forest) 0%, #213a7a 100%);
@@ -302,3 +302,26 @@ pre.code { background: var(--forest); color: #f6e7a6; padding: 12px 14px; border
 
 /* внутри мини-приложения Telegram: своя шапка у Telegram — прячем выход и язык, нижнее меню остаётся */
 .in-tg .topbar [data-logout] { display: none; }
+
+/* работа без сети, распознавание по фото, рейтинг */
+.netbar { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 90; border: 0; border-radius: 999px; padding: 7px 14px; font: 600 13px var(--font); background: var(--forest); color: #fff; box-shadow: 0 8px 24px rgba(21,39,90,.25); cursor: pointer; width: auto; min-height: 0; }
+.netbar.off { background: #4b5563; } .netbar.bad { background: var(--red); }
+.entry.queued { opacity: .75; border-left: 3px dashed var(--amber); padding-left: 8px; }
+.snap-wait { display: flex; align-items: center; gap: 12px; margin-top: 10px; color: var(--muted); font-size: 14px; }
+.snap-wait img { width: 64px; height: 64px; object-fit: cover; border-radius: 12px; animation: pulse 1.2s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: .55 } to { opacity: 1 } }
+label.disabled { pointer-events: none; opacity: .5; }
+.goal-bar { height: 10px; background: var(--green-soft); border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+.goal-bar i { display: block; height: 100%; background: var(--green); border-radius: 99px; }
+.goal-bar.ok i { background: #2f9e62; } .goal-bar.over i { background: var(--red); }
+.rank-row { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rank-row:last-child { border-bottom: 0; }
+.rank-n { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--surface-2); color: var(--ink-2); }
+.rank-row.top1 .rank-n { background: var(--lime); color: var(--lime-ink); } .rank-row.top2 .rank-n { background: #dfe5f1; } .rank-row.top3 .rank-n { background: #f4dcc4; }
+.rank-row.mine { background: var(--green-soft); border-radius: 12px; padding-left: 8px; padding-right: 8px; }
+.rank-score { font-size: 22px; font-weight: 800; text-align: right; } .rank-score small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; } .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--surface-2); color: var(--ink-2); }
+.badge.good { background: #dff3e7; color: #1d6b41; } .badge.warn { background: var(--amber-soft); color: var(--amber); }
+.public-eco main { max-width: 1080px; margin: 0 auto; padding: 20px 16px 40px; }
+.public-eco .topbar { position: sticky; top: 0; }
+.qty-row input { min-width: 0; flex: 1; }
