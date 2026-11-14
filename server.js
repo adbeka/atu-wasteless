@@ -22,6 +22,7 @@ const GOALS = require('./goals');
 const FC = require('./forecast');
 const REF = require('./reference');
 const ACC = require('./accounts');
+const MAIL = require('./mailer');
 
 const PORT = Number(process.env.PORT || 3000);
 const UPLOADS = process.env.UPLOADS_DIR || path.join(__dirname, 'data', 'uploads');
@@ -70,7 +71,7 @@ function parseCookies(req) {
     const i = c.indexOf('='); return [c.slice(0, i).trim(), decodeURIComponent(c.slice(i + 1))];
   }));
 }
-const loadUser = (where, ...p) => db.prepare(`SELECT u.id, u.full_name, u.email, u.role, u.org_id, u.lang, u.tenant_id, u.tg_chat_id,
+const loadUser = (where, ...p) => db.prepare(`SELECT u.id, u.full_name, u.email, u.role, u.org_id, u.lang, u.tenant_id, u.tg_chat_id, u.email_verified,
     o.name org_name, o.short org_short, t.kind tenant_kind, t.name tenant_name
   FROM users u JOIN tenants t ON t.id = u.tenant_id LEFT JOIN organizations o ON o.id = u.org_id WHERE ${where}`).get(...p);
 app.use(async (req, _res, next) => {
@@ -115,7 +116,9 @@ async function startSession(res, userId, req) {
 const attempts = new Map();
 function tooMany(key) {
   const now = Date.now(); const a = (attempts.get(key) || []).filter((t) => now - t < 15 * 60e3);
-  attempts.set(key, a); return a.length >= (key.startsWith('mail:') ? 8 : key.startsWith('reg:') ? 10 : 40);
+  attempts.set(key, a);
+  const LIMITS = { mail: 8, reg: 10, forgot: 3, forgotip: 20, verify: 3 }; // писем — не чаще 3 за 15 минут
+  return a.length >= (LIMITS[key.split(':')[0]] ?? 40);
 }
 const failAttempt = (key) => attempts.set(key, [...(attempts.get(key) || []), Date.now()]);
 setInterval(() => { const now = Date.now(); for (const [k, a] of attempts) if (!a.some((t) => now - t < 15 * 60e3)) attempts.delete(k); }, 10 * 60e3).unref();
@@ -136,6 +139,66 @@ app.post('/api/logout', async (req, res) => {
   res.json({ ok: true });
 });
 const accountErr = (res, e) => { if (e instanceof ACC.AccountError) return bad(res, e.message); throw e; };
+// ---------- письма: подтверждение e-mail и сброс пароля ----------
+const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+const realEmail = (e) => !/@(telegram\.wasteless|wasteless\.demo)$/.test(String(e));
+async function issueToken(userId, kind, email, ttlMs) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  await db.prepare('DELETE FROM auth_tokens WHERE user_id=? AND kind=? AND used_at IS NULL').run(userId, kind);
+  await db.prepare('INSERT INTO auth_tokens (token_hash, user_id, kind, email, expires_at) VALUES (?,?,?,?,?)').run(sha(token), userId, kind, email, new Date(Date.now() + ttlMs).toISOString());
+  return token;
+}
+async function takeToken(token, kind) {
+  const t = await db.prepare('SELECT * FROM auth_tokens WHERE token_hash=? AND kind=?').get(sha(token || ''), kind);
+  if (!t || t.used_at || t.expires_at < nowIso()) return null;
+  const r = await db.prepare('UPDATE auth_tokens SET used_at=? WHERE token_hash=? AND used_at IS NULL').run(nowIso(), t.token_hash);
+  return r.changes ? t : null;
+}
+// письмо со ссылкой подтверждения; ошибки почты не ломают регистрацию
+async function sendVerify(req, userId) {
+  const u = await db.prepare('SELECT id, full_name, email, email_verified FROM users WHERE id=?').get(userId);
+  if (!u || u.email_verified || !realEmail(u.email)) return;
+  const token = await issueToken(u.id, 'verify', u.email, 3 * 864e5);
+  await MAIL.sendTemplate('verify', u.email, { name: u.full_name, url: `${publicUrl(req)}/app#/verify?token=${token}` })
+    .catch((e) => console.error('[mail] verify:', e.message));
+}
+app.post('/api/password/forgot', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  // ответ всегда одинаковый — по нему нельзя узнать, зарегистрирован ли адрес
+  const done = () => res.json({ ok: true, mail: MAIL.enabled() });
+  if (!email || tooMany('forgot:' + email) || tooMany('forgotip:' + req.ip)) return done();
+  failAttempt('forgot:' + email); failAttempt('forgotip:' + req.ip);
+  const u = await db.prepare(`SELECT u.id, u.full_name, u.email FROM users u JOIN tenants t ON t.id=u.tenant_id WHERE lower(u.email)=? AND u.active=1 AND t.kind <> 'demo'`).get(email);
+  if (u && realEmail(u.email)) {
+    const token = await issueToken(u.id, 'reset', u.email, 3600e3);
+    await MAIL.sendTemplate('reset', u.email, { name: u.full_name, url: `${publicUrl(req)}/app#/reset?token=${token}` }).catch((e) => console.error('[mail] reset:', e.message));
+  }
+  done();
+});
+app.post('/api/password/reset', async (req, res) => {
+  try { ACC.checkPasswordRules(req.body?.password); } catch (e) { return accountErr(res, e); }
+  const t = await takeToken(req.body?.token, 'reset');
+  if (!t) return bad(res, 'Ссылка устарела или уже использована — запросите новую');
+  await db.prepare('UPDATE users SET pass_hash=?, email_verified=1 WHERE id=? AND lower(email)=lower(?)').run(hashPassword(req.body.password), t.user_id, t.email);
+  await db.prepare('DELETE FROM sessions WHERE user_id=?').run(t.user_id);
+  await startSession(res, t.user_id, req);
+  res.json({ ok: true });
+});
+app.post('/api/verify', async (req, res) => {
+  const t = await takeToken(req.body?.token, 'verify');
+  if (!t) return bad(res, 'Ссылка подтверждения устарела или уже использована');
+  const r = await db.prepare('UPDATE users SET email_verified=1 WHERE id=? AND lower(email)=lower(?)').run(t.user_id, t.email);
+  if (!r.changes) return bad(res, 'E-mail в аккаунте уже изменён — подтвердите новый адрес');
+  res.json({ ok: true });
+});
+app.post('/api/me/verify-resend', async (req, res) => {
+  if (!req.user) return bad(res, 'Требуется вход в систему', 401);
+  if (tooMany('verify:' + req.user.id)) return bad(res, 'Письмо уже отправлено. Проверьте почту и папку «Спам».', 429);
+  failAttempt('verify:' + req.user.id);
+  await sendVerify(req, req.user.id);
+  res.json({ ok: true, mail: MAIL.enabled() });
+});
+
 // регистрация: kind = company | personal
 app.post('/api/register', async (req, res) => {
   const b = req.body || {};
@@ -144,6 +207,7 @@ app.post('/api/register', async (req, res) => {
     const r = b.kind === 'company' ? await ACC.createCompany(b) : await ACC.createPersonal(b);
     failAttempt('reg:' + req.ip);
     await startSession(res, r.userId, req);
+    sendVerify(req, r.userId);
     res.json({ ok: true });
   } catch (e) { accountErr(res, e); }
 });
@@ -154,7 +218,7 @@ app.get('/api/invite/:code', async (req, res) => {
   res.json({ company: inv.company, role: inv.role, role_ru: ACC.ROLE_RU[inv.role], org: inv.org_short || null, expires_at: inv.expires_at });
 });
 app.post('/api/join', async (req, res) => {
-  try { const r = await ACC.joinByInvite(req.body || {}); await startSession(res, r.userId, req); res.json({ ok: true }); }
+  try { const r = await ACC.joinByInvite(req.body || {}); await startSession(res, r.userId, req); sendVerify(req, r.userId); res.json({ ok: true }); }
   catch (e) { accountErr(res, e); }
 });
 // «Посмотреть демо»: вход в демо-компанию выбранной ролью, только просмотр
@@ -184,7 +248,9 @@ app.put('/api/me/profile', auth(), async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return bad(res, 'Укажите корректный e-mail');
     if (await db.prepare('SELECT id FROM users WHERE lower(email)=? AND id<>?').get(email, req.user.id)) return bad(res, 'Этот e-mail уже занят');
   }
-  await db.prepare('UPDATE users SET full_name=?, email=? WHERE id=?').run(name.slice(0, 80), email, req.user.id);
+  const changed = email !== req.user.email.toLowerCase();
+  await db.prepare(`UPDATE users SET full_name=?, email=?${changed ? ', email_verified=0' : ''} WHERE id=?`).run(name.slice(0, 80), email, req.user.id);
+  if (changed) sendVerify(req, req.user.id);
   if (req.user.role === 'personal') await db.prepare('UPDATE tenants SET name=? WHERE id=?').run(`Личный: ${name.slice(0, 80)}`, req.user.tenant_id);
   res.json({ ok: true });
 });
@@ -280,7 +346,7 @@ app.put('/api/methods/:id', auth('admin'), platformOnly, async (req, res) => {
 });
 
 // ---------- настройки компании, справочники, отраслевые шаблоны ----------
-app.get('/api/config', async (req, res) => res.json({ ...(await REF.getSettings(req.user?.tenant_id)), bot: BOT.state.username || null }));
+app.get('/api/config', async (req, res) => res.json({ ...(await REF.getSettings(req.user?.tenant_id)), bot: BOT.state.username || null, mail: MAIL.enabled() }));
 app.put('/api/config', auth('admin'), async (req, res) => { await REF.setSettings(T(req), req.body || {}); res.json(await REF.getSettings(T(req))); });
 app.post('/api/reference/import', auth('admin'), async (req, res) => {
   const m = /^data:[^;]*;base64,(.+)$/.exec(String(req.body?.file || ''));
@@ -392,7 +458,16 @@ app.post('/api/invites', auth('admin'), async (req, res) => {
   try {
     const r = await ACC.createInvite(req.user, req.body || {});
     const url = `${publicUrl(req)}/app#/join?code=${r.code}`;
-    res.json({ ...r, url, qr: await QRCode.toDataURL(url, { width: 320, margin: 1 }) });
+    // по желанию — отправить ссылку на e-mail сотрудника
+    let mailed = null;
+    const to = String(req.body?.email || '').trim().toLowerCase();
+    if (to) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return bad(res, 'Укажите корректный e-mail сотрудника');
+      const cfg = await REF.getSettings(T(req));
+      mailed = await MAIL.sendTemplate('invite', to, { company: cfg.company, role: ACC.ROLE_RU[req.body.role], inviter: req.user.full_name, url })
+        .then((x) => x.sent).catch((e) => { console.error('[mail] invite:', e.message); return false; });
+    }
+    res.json({ ...r, url, mailed, qr: await QRCode.toDataURL(url, { width: 320, margin: 1 }) });
   } catch (e) { accountErr(res, e); }
 });
 app.delete('/api/invites/:id', auth('admin'), async (req, res) => {
@@ -508,15 +583,19 @@ app.post('/api/reports/:id/return', auth('reviewer', 'admin'), async (req, res) 
 });
 
 // ---------- записи (взвешивания) ----------
-function savePhoto(dataUrl) {
+// фото храним в базе (таблица photos): переживают деплой, не нужен отдельный диск. Сжатое фото — ~100–300 КБ.
+async function savePhoto(dataUrl) {
   const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(dataUrl || '');
   if (!m) return null;
   const buf = Buffer.from(m[2], 'base64');
   if (buf.length > 4.5 * 1024 * 1024) return null;
   const name = `${crypto.randomBytes(10).toString('hex')}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
-  fs.writeFileSync(path.join(UPLOADS, name), buf);
+  await db.prepare('INSERT INTO photos (name, mime, data, created_at) VALUES (?,?,?,?)').run(name, `image/${m[1]}`, buf, nowIso());
   return name;
 }
+// фото, загруженные для распознавания, но так и не привязанные к записи, удаляем через сутки
+setInterval(() => db.prepare('DELETE FROM photos WHERE created_at < ? AND name NOT IN (SELECT photo FROM entries WHERE photo IS NOT NULL)')
+  .run(new Date(Date.now() - 864e5).toISOString()).catch((e) => console.error('[photos] очистка:', e.message)), 3600e3).unref();
 async function validateEntry(user, b) {
   const date = String(b.date || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Укажите дату';
@@ -553,7 +632,7 @@ app.post('/api/entries', auth('resp'), async (req, res) => {
     const dup = await db.prepare('SELECT id FROM entries WHERE report_id=? AND date=? AND waste_type_id=? AND qty=?').get(rep.id, v.date, v.w.id, v.qty);
     if (dup) return bad(res, `Похоже на дубль: «${v.w.name}» ${v.qty} ${v.w.unit} за эту дату уже внесено. Сохранить всё равно?`, 409, { duplicate: true });
   }
-  const photo = takePhotoRef(req.user, req.body.photo_ref) || savePhoto(req.body.photo);
+  const photo = takePhotoRef(req.user, req.body.photo_ref) || await savePhoto(req.body.photo);
   const source = ['manual', 'voice', 'photo', 'offline'].includes(req.body.source) ? req.body.source : 'manual';
   const prod = req.body.product_id ? await db.prepare('SELECT id FROM products WHERE id=?').get(+req.body.product_id) : null;
   const r = await db.prepare('INSERT INTO entries (report_id, date, waste_type_id, qty, method_id, user_id, photo, note, created_at, source, product_id, client_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
@@ -584,7 +663,11 @@ app.get('/api/photo/:name', auth(), async (req, res) => {
   const name = path.basename(req.params.name);
   const e = await db.prepare('SELECT r.org_id, o.tenant_id FROM entries e JOIN reports r ON r.id=e.report_id JOIN organizations o ON o.id=r.org_id WHERE e.photo=?').get(name);
   if (!e || e.tenant_id !== T(req) || (isEntry(req.user) && e.org_id !== req.user.org_id)) return res.status(404).end();
-  res.sendFile(path.join(UPLOADS, name));
+  const ph = await db.prepare('SELECT mime, data FROM photos WHERE name=?').get(name);
+  if (ph) { res.setHeader('Content-Type', ph.mime); res.setHeader('Cache-Control', 'private, max-age=86400'); return res.send(Buffer.from(ph.data)); }
+  const file = path.join(UPLOADS, name); // старые фото с диска
+  if (fs.existsSync(file)) return res.sendFile(file);
+  res.status(404).end();
 });
 
 // ---------- реестр, сводка, аналитика ----------
@@ -744,7 +827,7 @@ app.post('/api/ai/parse', auth('resp'), async (req, res) => {
 });
 // распознавание по фото: продукт/вид и вес (табло весов или оценка); фото сохраняется и привязывается к записям
 app.post('/api/ai/photo', auth('resp'), async (req, res) => {
-  const name = savePhoto(req.body?.photo);
+  const name = await savePhoto(req.body?.photo);
   if (!name) return bad(res, 'Приложите фото (JPEG/PNG, до 4 МБ)');
   photoRefs.set(name, { userId: req.user.id, at: Date.now() });
   const types = await orgTypes(req.user.org_id);
@@ -890,6 +973,7 @@ app.post('/api/production', auth('resp'), async (req, res) => {
   catch (e) { bad(res, e.message); }
 });
 
+if (process.env.MAIL_TEST_ENDPOINT && !MAIL.enabled()) app.get('/api/_test/mail', (_req, res) => res.json(MAIL.last));
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 // общий обработчик ошибок: в ответ — без подробностей, подробности — в лог
 app.use((err, req, res, _next) => {

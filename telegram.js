@@ -132,7 +132,7 @@ function start(deps) {
     const types = await orgTypes(u.org_id);
     const r = await AI.photo(dataUrl, types);
     if (!r.items.length) return send(chatId, `${L(u, 'Не удалось определить отходы на фото.', 'Фотода қалдықтарды анықтау мүмкін болмады.')}${r.note ? '\n' + h(r.note) : ''}\n${L(u, 'Напишите фразой, например', 'Сөйлеммен жазыңыз, мысалы')}: <i>${L(u, 'хлеб 3 кг', 'нан 3 кг')}</i>`);
-    return askConfirm(chatId, r, types, L(u, 'Распознано по фото (ИИ)', 'Фото бойынша танылды (ЖИ)'), savePhoto(dataUrl), u);
+    return askConfirm(chatId, r, types, L(u, 'Распознано по фото (ИИ)', 'Фото бойынша танылды (ЖИ)'), await savePhoto(dataUrl), u);
   }
   async function onText(chatId, u, text) {
     const types = await orgTypes(u.org_id);

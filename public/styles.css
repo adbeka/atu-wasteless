@@ -336,3 +336,6 @@ label.disabled { pointer-events: none; opacity: .5; }
 .demo-bar { background: var(--lime); color: var(--lime-ink); padding: 8px 16px; font-size: 14px; font-weight: 600; text-align: center; }
 .demo-bar a { color: var(--forest); text-decoration: underline; margin-left: 6px; }
 .invite-url { font-family: ui-monospace, Menlo, monospace; font-size: 12px; word-break: break-all; background: var(--surface-2); padding: 8px; border-radius: 8px; }
+
+.verify-bar { background: var(--blue-soft); color: var(--ink); padding: 8px 16px; font-size: 14px; text-align: center; display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.verify-bar a { color: var(--blue); text-decoration: underline; } .verify-bar .icon-btn { width: auto; min-height: 0; padding: 2px 6px; }

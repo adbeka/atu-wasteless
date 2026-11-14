@@ -50,7 +50,7 @@ if (IS_PG) {
       catch (e) { await c.query('ROLLBACK').catch(() => {}); throw e; }
       finally { c.release(); }
     },
-    ddl: (sql) => sql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY').replace(/\bREAL\b/g, 'DOUBLE PRECISION'),
+    ddl: (sql) => sql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/g, 'SERIAL PRIMARY KEY').replace(/\bREAL\b/g, 'DOUBLE PRECISION').replace(/\bBLOB\b/g, 'BYTEA'),
     async addColumn(table, def) { await impl.exec(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${impl.ddl(def)}`); },
     end: () => pool.end(),
   };
@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS users (
   active INTEGER NOT NULL DEFAULT 1,
   tg_chat_id TEXT,
   lang TEXT NOT NULL DEFAULT 'ru',
+  email_verified INTEGER NOT NULL DEFAULT 0,
   created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -256,6 +257,20 @@ CREATE TABLE IF NOT EXISTS production (
 CREATE INDEX IF NOT EXISTS idx_production_org_date ON production(org_id, date);
 CREATE INDEX IF NOT EXISTS idx_orgs_tenant ON organizations(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
+CREATE TABLE IF NOT EXISTS photos (
+  name TEXT PRIMARY KEY,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL CHECK (kind IN ('reset','verify')),
+  email TEXT,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
 `;
 
 let ready = null;
@@ -263,6 +278,8 @@ let ready = null;
 function init() {
   ready ??= (async () => {
     for (const stmt of impl.ddl(SCHEMA).split(';').map((x) => x.trim()).filter(Boolean)) await impl.exec(stmt);
+    // миграции для уже созданных баз
+    await impl.addColumn('users', 'email_verified INTEGER NOT NULL DEFAULT 0');
   })();
   return ready;
 }

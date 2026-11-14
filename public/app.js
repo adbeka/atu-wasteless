@@ -361,6 +361,8 @@ async function route() {
     try { S.user = (await api('/me')).user; } catch { S.user = null; }
   }
   if (r.page === 'join') return renderJoin(r);
+  if (r.page === 'reset') return renderReset(r);
+  if (r.page === 'verify') return renderVerify(r);
   // мини-приложение Telegram: вход по подписанным данным Telegram, без пароля
   const TG = window.Telegram?.WebApp;
   if (!S.user && TG?.initData && !S.tgTried) {
@@ -476,11 +478,14 @@ function shell(page) {
     <div style="min-width:0">
       <header class="topbar"><div class="brand">${LOGO}<div><b>${esc(S.user.role === 'personal' ? 'Wasteless' : S.user.org_short || S.cfg.systemName)}</b></div></div>
         ${lang(true)}<a class="btn-ghost-light" href="#/profile" title="${T('Профиль')}" style="display:inline-flex;align-items:center;padding:8px">${icon('user')}</a><button class="btn-ghost-light" data-logout title="${T('Выйти')}">${icon('out')}</button></header>
+      ${S.cfg.mail && !S.user.demo && !S.user.email_verified && !/@telegram\.wasteless$/.test(S.user.email) && !S.verifyHidden ? `<div class="verify-bar">✉️ ${T('Подтвердите e-mail')} <b>${esc(S.user.email)}</b> — ${T('ссылка в письме.')} <a href="#" id="vResend">${T('Отправить ещё раз')}</a> <button class="icon-btn" id="vHide" title="${T('Скрыть')}">✕</button></div>` : ''}
       ${S.user.demo ? `<div class="demo-bar">👀 ${T('Демо-режим: только просмотр.')} <a href="#" id="demoReg">${T('Создать свой аккаунт бесплатно')} →</a></div>` : ''}
       <main></main>
     </div>
   </div>
   <nav class="bottom-nav">${links.slice(0, 5).map((l) => `<a href="#/${l.k}" class="${l.active ? 'active' : ''}">${icon(NAV_ICON[l.k])}${esc(l.label.split(' ')[0])}</a>`).join('')}</nav>`;
+  $('#vResend')?.addEventListener('click', async (e) => { e.preventDefault(); try { await api('/me/verify-resend', { method: 'POST' }); toast(T('Письмо отправлено. Проверьте и папку «Спам».')); } catch (err) { toast(err.message, true); } });
+  $('#vHide')?.addEventListener('click', () => { S.verifyHidden = true; $('.verify-bar')?.remove(); });
   $('#demoReg')?.addEventListener('click', async (e) => { e.preventDefault(); await api('/logout', { method: 'POST' }).catch(() => {}); S.user = null; go('/register'); });
   $$('[data-logout]').forEach((b) => b.onclick = async () => {
     if (Q.all().length && !confirm(T('В очереди есть неотправленные записи. Они останутся на телефоне и уйдут после следующего входа. Выйти?'))) return;
@@ -595,9 +600,19 @@ async function renderLogin(r, tab = r.page === 'register' ? 'register' : 'login'
     catch (err) { toast(err.message, true); } finally { $('#rfBtn') && ($('#rfBtn').disabled = false); }
   };
   $('#forgot').onclick = (e) => { e.preventDefault(); modal(`<h2>${T('Восстановление пароля')}</h2>
-    <p>${T('Сотрудник компании: попросите администратора компании задать новый пароль (Администрирование → Пользователи).')}</p>
-    <p>${T('Личный аккаунт, привязанный к Telegram: откройте бота и нажмите кнопку меню «Wasteless» — вход без пароля, затем задайте новый пароль в профиле.')}</p>
-    <button data-close>${T('Понятно')}</button>`); };
+    <p class="small muted">${T('Укажите e-mail аккаунта — пришлём ссылку для нового пароля. Ссылка действует 1 час.')}</p>
+    <form id="fg"><div class="field"><label>E-mail</label><input name="email" type="email" required value="${esc($('#lf [name=email]').value)}"></div>
+      <button class="btn-lg">${T('Отправить ссылку')}</button></form>
+    <div id="fgRes"></div>
+    <p class="small muted" style="margin-top:12px">${T('Не приходит письмо? Сотруднику пароль может задать администратор компании. Личный аккаунт с Telegram — войдите через мини-приложение бота без пароля.')}</p>`, (m) => {
+    $('#fg', m).onsubmit = async (ev) => {
+      ev.preventDefault();
+      try { const r = await api('/password/forgot', { method: 'POST', body: Object.fromEntries(new FormData(ev.target)) });
+        $('#fgRes', m).innerHTML = `<div class="alert alert-green">${r.mail ? T('Если такой аккаунт есть, письмо уже в пути. Проверьте и папку «Спам».') : T('Отправка писем пока не настроена на сервере — обратитесь к администратору компании.')}</div>`;
+        ev.target.querySelector('button').disabled = true; }
+      catch (err) { toast(err.message, true); }
+    };
+  }); };
   $('#demoBtn').onclick = () => { $('#demoRoles').classList.toggle('hidden'); if (MOTION) anime({ targets: '#demoRoles .role', opacity: [0, 1], translateY: [10, 0], delay: anime.stagger(50), duration: 400, easing: 'easeOutCubic' }); };
   $$('[data-demo]').forEach((b) => b.onclick = async () => {
     try { await api('/demo', { method: 'POST', body: { role: b.dataset.demo } }); await afterAuth(); } catch (err) { toast(err.message, true); }
@@ -606,6 +621,26 @@ async function renderLogin(r, tab = r.page === 'register' ? 'register' : 'login'
   if (['manager', 'resp', 'reviewer', 'admin'].includes(r.q.demo)) $(`[data-demo="${r.q.demo}"]`)?.click();
 }
 const renderRegister = (r) => renderLogin(r, 'register');
+
+// сброс пароля по ссылке из письма: #/reset?token=...
+function renderReset(r) {
+  $('#app').innerHTML = authShell(`<div class="card login-panel"><h2>${T('Новый пароль')}</h2>
+    <form id="rs">${pwField()}<button class="btn-lg">${T('Сохранить и войти')}</button></form></div>`);
+  bindEyes(); animateLogin();
+  $('#rs').onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('/password/reset', { method: 'POST', body: { token: r.q.token, password: new FormData(e.target).get('password') } });
+      history.replaceState(null, '', '#/'); toast(T('Пароль изменён')); await afterAuth(); }
+    catch (err) { toast(err.message, true); }
+  };
+}
+async function renderVerify(r) {
+  let msg;
+  try { await api('/verify', { method: 'POST', body: { token: r.q.token } }); msg = `<h2>✅ ${T('E-mail подтверждён')}</h2><p>${T('Спасибо! Теперь пароль можно восстановить по почте.')}</p>`; if (S.user) S.user.email_verified = 1; }
+  catch (e) { msg = `<h2>${T('Не получилось')}</h2><p>${esc(e.message)}</p>`; }
+  $('#app').innerHTML = authShell(`<div class="card login-panel">${msg}<a class="btn" href="#/" id="goOn">${T('Продолжить')}</a></div>`);
+  animateLogin();
+}
 
 // приглашение: #/join?code=...
 async function renderJoin(r) {
@@ -660,7 +695,7 @@ async function pageProfile(main) {
     <div class="grid g2">
       <div class="card"><h3>${T('Данные')}</h3><form id="pf">
         <div class="field"><label>${T('Имя')}</label><input name="full_name" value="${esc(S.user.full_name)}" required></div>
-        <div class="field"><label>E-mail</label><input name="email" type="email" value="${tgOnly ? '' : esc(S.user.email)}" placeholder="${tgOnly ? T('добавьте e-mail, чтобы входить с компьютера') : ''}" required></div>
+        <div class="field"><label>E-mail ${tgOnly ? '' : S.user.email_verified ? `<span class="badge good">${T('подтверждён')}</span>` : `<span class="badge warn">${T('не подтверждён')}</span>`}</label><input name="email" type="email" value="${tgOnly ? '' : esc(S.user.email)}" placeholder="${tgOnly ? T('добавьте e-mail, чтобы входить с компьютера') : ''}" required></div>
         <button>${T('Сохранить')}</button></form></div>
       <div class="card"><h3>${tgOnly ? T('Задать пароль') : T('Сменить пароль')}</h3><form id="pw">
         ${tgOnly ? '' : `<div class="field"><label>${T('Текущий пароль')}</label><input name="current" type="password" autocomplete="current-password" required></div>`}
@@ -1465,6 +1500,7 @@ async function pageAdmin(main, r) {
           <div class="field"><label>${T('Роль')}</label><select name="role">${COMPANY_ROLES.map(([k, v]) => `<option value="${k}">${T(v)}</option>`).join('')}</select></div>
           <div class="field"><label>${esc(S.cfg.orgLabel)} (${T('для ответственного')})</label><select name="org_id">${orgs.map((o) => `<option value="${o.id}">${esc(o.short)}</option>`).join('')}</select></div>
           <div class="field"><label>${T('Сколько человек')}</label><input name="max_uses" type="number" min="1" max="100" value="1" style="width:90px"></div>
+          ${S.cfg.mail ? `<div class="field"><label>E-mail ${T('сотрудника')} <span class="muted small">(${T('необязательно')})</span></label><input name="email" type="email" placeholder="${T('отправим ссылку письмом')}"></div>` : ''}
           <button>${T('Создать ссылку')}</button></form>
         ${invites.length ? `<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>${T('Роль')}</th><th>${esc(S.cfg.orgLabel)}</th><th>${T('Использовано')}</th><th>${T('Действует до')}</th><th></th></tr></thead>
           <tbody>${invites.map((i) => `<tr><td>${esc(T(i.role_ru))}</td><td>${esc(i.org_short || '—')}</td><td>${i.uses} / ${i.max_uses}</td><td>${dmy(i.expires_at)}</td>
@@ -1490,7 +1526,7 @@ async function pageAdmin(main, r) {
       e.preventDefault();
       try {
         const r = await api('/invites', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) });
-        modal(`<div style="text-align:center"><h2>${T('Приглашение готово')}</h2><img src="${r.qr}" alt="" style="width:220px;max-width:100%">
+        modal(`<div style="text-align:center"><h2>${T('Приглашение готово')}</h2>${r.mailed ? `<div class="alert alert-green">${T('Письмо со ссылкой отправлено')}</div>` : r.mailed === false ? `<div class="alert alert-amber">${T('Письмо отправить не удалось — передайте ссылку сами')}</div>` : ''}<img src="${r.qr}" alt="" style="width:220px;max-width:100%">
           <div class="invite-url">${esc(r.url)}</div>
           <div class="row" style="justify-content:center;margin-top:12px"><button id="cp">${T('Копировать ссылку')}</button>
           ${navigator.share ? `<button class="btn-light" id="sh">${T('Поделиться')}</button>` : ''}<button class="btn-light" data-close>${T('Готово')}</button></div></div>`, (m) => {
